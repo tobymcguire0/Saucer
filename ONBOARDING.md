@@ -63,6 +63,24 @@ Tags are organized under categories. Recipes store canonical tag IDs, not raw st
 ## Design Reference
 Initial wireframes live in Figma: [Cookbook UX Wireframes](https://www.figma.com/design/mN7rU80AQ7di7qan2Ceyqf)
 
+## Changing the App Icon and Name
+
+### Name
+Edit two fields in `src-tauri/tauri.conf.json`:
+- `productName` — the name shown in installers, the taskbar, and the title bar fallback
+- `app.windows[0].title` — the window title displayed at runtime
+
+### Icon
+1. Prepare a single high-resolution source image (1024 x 1024 px minimum, PNG with transparency recommended).
+2. Run the Tauri icon generator:
+   ```
+   npx tauri icon path/to/source-icon.png
+   ```
+   This overwrites every file in `src-tauri/icons/` with correctly sized variants (`.ico`, `.icns`, `32x32.png`, `128x128.png`, `128x128@2x.png`, `Square*Logo.png`, `StoreLogo.png`).
+3. Rebuild the app (`npm run tauri build`) to pick up the new icons.
+
+The `bundle.icon` array in `tauri.conf.json` already references these paths, so no config edits are needed after regeneration.
+
 ## Recommended Reading Order
 1. `AGENTS.md`
 2. `src/App.tsx`

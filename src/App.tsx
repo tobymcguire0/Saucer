@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import "./App.css";
 import {
   extractDraftFromPhoto,
   extractDraftFromTextFile,
@@ -18,6 +17,7 @@ import {
   ensureDefaultTaxonomy,
   getCategoryByName,
   mergeTags,
+  normalizeTerm,
   upsertCategory,
   upsertTag,
 } from "./lib/taxonomy";
@@ -34,6 +34,35 @@ const defaultQuery: RecipeQuery = {
 };
 
 type StatusTone = "info" | "success" | "error";
+type AppView = "recipes" | "taxonomy" | "recipeDetail";
+
+const previewTagLimit = 6;
+
+function sortTagIdsForPreview(
+  tagIds: string[],
+  tagLookup: Map<string, Taxonomy["tags"][number]>,
+  categoryLookup: Map<string, Taxonomy["categories"][number]>,
+) {
+  return [...tagIds].sort((leftId, rightId) => {
+    const leftTag = tagLookup.get(leftId);
+    const rightTag = tagLookup.get(rightId);
+    const leftCategory = leftTag ? categoryLookup.get(leftTag.categoryId) : undefined;
+    const rightCategory = rightTag ? categoryLookup.get(rightTag.categoryId) : undefined;
+    const leftPriority = leftCategory?.name === "Ingredients" ? 1 : 0;
+    const rightPriority = rightCategory?.name === "Ingredients" ? 1 : 0;
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    const categoryCompare = (leftCategory?.name ?? "").localeCompare(rightCategory?.name ?? "");
+    if (categoryCompare !== 0) {
+      return categoryCompare;
+    }
+
+    return (leftTag?.name ?? leftId).localeCompare(rightTag?.name ?? rightId);
+  });
+}
 
 function toDraft(recipe: Recipe): RecipeDraft {
   return {
@@ -61,10 +90,11 @@ function App() {
   const [visibleRecipes, setVisibleRecipes] = useState<Recipe[]>([]);
   const [query, setQuery] = useState<RecipeQuery>(defaultQuery);
   const [groupByCategoryId, setGroupByCategoryId] = useState("");
+  const [activeView, setActiveView] = useState<AppView>("recipes");
+  const [selectedRecipeId, setSelectedRecipeId] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<"create" | "edit">("create");
   const [draft, setDraft] = useState<RecipeDraft>(createEmptyDraft());
-  const [activeView, setActiveView] = useState<"recipes" | "taxonomy">("recipes");
   const [statusMessage, setStatusMessage] = useState("Loading cookbook...");
   const [statusTone, setStatusTone] = useState<StatusTone>("info");
   const [statusExpanded, setStatusExpanded] = useState(false);
@@ -80,6 +110,7 @@ function App() {
   const [showSourceControls, setShowSourceControls] = useState(true);
   const [uploadErrorActive, setUploadErrorActive] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [draftTagInputs, setDraftTagInputs] = useState<Record<string, string>>({});
 
   function updateStatus(message: string, tone: StatusTone = "info") {
     setStatusMessage(message);
@@ -122,6 +153,19 @@ function App() {
     () => new Map(taxonomy.categories.map((category) => [category.id, category])),
     [taxonomy.categories],
   );
+
+  const selectedRecipe = useMemo(
+    () => recipes.find((recipe) => recipe.id === selectedRecipeId),
+    [recipes, selectedRecipeId],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (statusExpandTimerRef.current) {
+        clearTimeout(statusExpandTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     async function initialize() {
@@ -188,6 +232,7 @@ function App() {
     setDraftImported(false);
     setShowSourceControls(true);
     setUploadErrorActive(false);
+    setDraftTagInputs({});
     updateStatus(
       sourceType === "manual"
         ? "Manual recipe entry ready."
@@ -203,6 +248,7 @@ function App() {
     setDraftImported(true);
     setShowSourceControls(false);
     setUploadErrorActive(false);
+    setDraftTagInputs({});
     updateStatus(`Editing ${recipe.title}.`, "info");
   }
 
@@ -315,6 +361,10 @@ function App() {
     const snapshot = await recipeStore.deleteRecipe(recipeId);
     setRecipes(snapshot.recipes);
     setTaxonomy(snapshot.taxonomy);
+    if (selectedRecipeId === recipeId) {
+      setSelectedRecipeId("");
+      setActiveView("recipes");
+    }
     updateStatus("Recipe deleted.", "success");
     await searchIndex.rebuild(snapshot.recipes, snapshot.taxonomy);
   }
@@ -414,6 +464,49 @@ function App() {
     updateStatus("Choose a new source to replace this imported draft.", "info");
   }
 
+  function openRecipeDetail(recipeId: string) {
+    setSelectedRecipeId(recipeId);
+    setActiveView("recipeDetail");
+    const recipe = recipes.find((entry) => entry.id === recipeId);
+    updateStatus(recipe ? `Viewing ${recipe.title}.` : "Viewing recipe details.", "info");
+  }
+
+  function closeRecipeDetail() {
+    setActiveView("recipes");
+    updateStatus("Returned to recipe browse view.", "info");
+  }
+
+  async function createDraftTag(categoryId: string) {
+    const inputValue = draftTagInputs[categoryId] ?? "";
+    const trimmedName = inputValue.trim();
+    if (!trimmedName) {
+      updateStatus("Enter a tag name before adding it to the recipe.", "error");
+      return;
+    }
+
+    const nextTaxonomy = upsertTag(taxonomy, categoryId, trimmedName);
+    const createdTag = nextTaxonomy.tags.find(
+      (tag) =>
+        tag.categoryId === categoryId && normalizeTerm(tag.name) === normalizeTerm(trimmedName),
+    );
+
+    await syncState(recipes, nextTaxonomy, `Tag "${trimmedName}" added to the recipe form.`);
+
+    if (createdTag) {
+      setDraft((current) => ({
+        ...current,
+        selectedTagIds: current.selectedTagIds.includes(createdTag.id)
+          ? current.selectedTagIds
+          : [...current.selectedTagIds, createdTag.id],
+      }));
+    }
+
+    setDraftTagInputs((current) => ({
+      ...current,
+      [categoryId]: "",
+    }));
+  }
+
   const groupedRecipes = useMemo(
     () =>
       groupByCategoryId
@@ -440,16 +533,19 @@ function App() {
             searchable recipe drafts.
           </p>
           <div className="button-row">
-            <button type="button" onClick={() => setActiveView("recipes")}>
-              Browse recipes
-            </button>
             <button type="button" onClick={() => openCreateEditor("website")}>
               Upload Recipe
             </button>
-            <button type="button" className="secondary" onClick={() => setActiveView("taxonomy")}>
+          </div>
+          <div className="button-row">
+            <button type="button" className={activeView === "recipes" || activeView === "recipeDetail" ? "secondary nav-active" : "secondary"} onClick={() => setActiveView("recipes")}>
+              Browse recipes
+            </button>
+            <button type="button" className={activeView === "taxonomy" ? "secondary nav-active" : "secondary"} onClick={() => setActiveView("taxonomy")}>
               Manage taxonomy
             </button>
           </div>
+          
         </div>
 
         <div className="sidebar-section">
@@ -560,11 +656,41 @@ function App() {
         <header className="content-header">
           <div>
             <p className="eyebrow">Workspace</p>
-            <h2>{activeView === "recipes" ? "Browse recipes" : "Manage categories and tags"}</h2>
+            <h2>
+              {activeView === "recipes"
+                ? "Browse recipes"
+                : activeView === "recipeDetail"
+                  ? "Recipe details"
+                  : "Manage categories and tags"}
+            </h2>
           </div>
         </header>
 
-        {activeView === "recipes" ? (
+        {activeView === "recipeDetail" ? (
+          selectedRecipe ? (
+            <RecipeDetailView
+              recipe={selectedRecipe}
+              tagLookup={tagLookup}
+              categoryLookup={categoryLookup}
+              onBack={closeRecipeDetail}
+              onEdit={openEditEditor}
+              onDelete={deleteRecipe}
+              onRate={updateRecipeRating}
+            />
+          ) : (
+            <section className="recipe-detail-view">
+              <div className="recipe-detail-header">
+                <div>
+                  <p className="eyebrow">Recipe detail</p>
+                  <h2>No recipe selected</h2>
+                </div>
+                <button type="button" className="secondary" onClick={closeRecipeDetail}>
+                  Back to browse
+                </button>
+              </div>
+            </section>
+          )
+        ) : activeView === "recipes" ? (
           groupByCategoryId ? (
             <div className="section-stack">
               {groupedRecipes.map((section) => (
@@ -575,15 +701,16 @@ function App() {
                   </div>
                   <div className="recipe-grid">
                     {section.recipes.map((recipe) => (
-                      <article key={recipe.id} className="recipe-card">
-                        <RecipeCard
-                          recipe={recipe}
-                          tagLookup={tagLookup}
-                          onEdit={openEditEditor}
-                          onDelete={deleteRecipe}
-                          onRate={updateRecipeRating}
-                        />
-                      </article>
+                      <RecipeCard
+                        key={recipe.id}
+                        recipe={recipe}
+                        tagLookup={tagLookup}
+                        categoryLookup={categoryLookup}
+                        onEdit={openEditEditor}
+                        onDelete={deleteRecipe}
+                        onOpenDetail={openRecipeDetail}
+                        onRate={updateRecipeRating}
+                      />
                     ))}
                   </div>
                 </section>
@@ -592,15 +719,16 @@ function App() {
           ) : (
             <div className="recipe-grid">
               {visibleRecipes.map((recipe) => (
-                <article key={recipe.id} className="recipe-card">
-                  <RecipeCard
-                    recipe={recipe}
-                    tagLookup={tagLookup}
-                    onEdit={openEditEditor}
-                    onDelete={deleteRecipe}
-                    onRate={updateRecipeRating}
-                  />
-                </article>
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  tagLookup={tagLookup}
+                  categoryLookup={categoryLookup}
+                  onEdit={openEditEditor}
+                  onDelete={deleteRecipe}
+                  onOpenDetail={openRecipeDetail}
+                  onRate={updateRecipeRating}
+                />
               ))}
             </div>
           )
@@ -767,7 +895,7 @@ function App() {
                       .filter((tag) => tag.categoryId === category.id)
                       .map((tag) => (
                         <div key={tag.id} className="taxonomy-tag">
-                          <strong>{tag.name}</strong>
+                          <strong>{tag.name} </strong>
                           <span className="muted">
                             {tag.aliases.length > 0 ? `Aliases: ${tag.aliases.join(", ")}` : "No aliases yet"}
                           </span>
@@ -1010,6 +1138,22 @@ function App() {
                           </button>
                         ))}
                     </div>
+                    <div className="draft-tag-row">
+                      <input
+                        value={draftTagInputs[category.id] ?? ""}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value;
+                          setDraftTagInputs((current) => ({
+                            ...current,
+                            [category.id]: value,
+                          }));
+                        }}
+                        placeholder={`Add a ${category.name} tag`}
+                      />
+                      <button type="button" className="secondary" onClick={() => void createDraftTag(category.id)}>
+                        Add tag
+                      </button>
+                    </div>
                   </div>
                 ))}
               </section>
@@ -1049,20 +1193,223 @@ function App() {
 type RecipeCardProps = {
   recipe: Recipe;
   tagLookup: Map<string, Taxonomy["tags"][number]>;
+  categoryLookup: Map<string, Taxonomy["categories"][number]>;
+  onEdit: (recipe: Recipe) => void;
+  onDelete: (recipeId: string) => Promise<void>;
+  onOpenDetail: (recipeId: string) => void;
+  onRate: (recipeId: string, rating: number) => Promise<void>;
+};
+
+type StarRatingProps = {
+  rating: number;
+  label: string;
+  onRate: (rating: number) => void;
+  compact?: boolean;
+  stopPropagation?: boolean;
+};
+
+function StarRating({
+  rating,
+  label,
+  onRate,
+  compact = false,
+  stopPropagation = false,
+}: StarRatingProps) {
+  const [hoverValue, setHoverValue] = useState(0);
+  const displayValue = hoverValue || rating;
+
+  return (
+    <div
+      className={`star-rating${compact ? " star-rating-compact" : ""}`}
+      aria-label={label}
+      onMouseLeave={() => setHoverValue(0)}
+    >
+      {[1, 2, 3, 4, 5].map((value) => (
+        <button
+          key={value}
+          type="button"
+          className={value <= displayValue ? "rating-star rating-star-filled" : "rating-star"}
+          aria-label={`${label}: ${value} star${value === 1 ? "" : "s"}`}
+          onMouseEnter={() => setHoverValue(value)}
+          onFocus={() => setHoverValue(value)}
+          onBlur={() => setHoverValue(0)}
+          onClick={(event) => {
+            if (stopPropagation) {
+              event.stopPropagation();
+            }
+            onRate(value);
+          }}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
+type RecipeDetailViewProps = {
+  recipe: Recipe;
+  tagLookup: Map<string, Taxonomy["tags"][number]>;
+  categoryLookup: Map<string, Taxonomy["categories"][number]>;
+  onBack: () => void;
   onEdit: (recipe: Recipe) => void;
   onDelete: (recipeId: string) => Promise<void>;
   onRate: (recipeId: string, rating: number) => Promise<void>;
 };
 
-function RecipeCard({ recipe, tagLookup, onEdit, onDelete, onRate }: RecipeCardProps) {
+function RecipeDetailView({
+  recipe,
+  tagLookup,
+  categoryLookup,
+  onBack,
+  onEdit,
+  onDelete,
+  onRate,
+}: RecipeDetailViewProps) {
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const sortedTagIds = sortTagIdsForPreview(recipe.tagIds, tagLookup, categoryLookup);
+
+  useEffect(() => {
+    setDeleteConfirming(false);
+  }, [recipe.id]);
+
   return (
-    <>
+    <section className="recipe-detail-view" data-testid="recipe-detail-view">
+      <div className="recipe-detail-header">
+        <div>
+          <p className="eyebrow">Recipe detail</p>
+          <h2>{recipe.title}</h2>
+          <p className="muted">
+            {recipe.cuisine || "Unknown cuisine"} · {recipe.mealType || "Any meal"} ·{" "}
+            {recipe.servings || "Servings not set"}
+          </p>
+        </div>
+        <div className="button-row">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              setDeleteConfirming(false);
+              onBack();
+            }}
+          >
+            Back to browse
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteConfirming(false);
+              onEdit(recipe);
+            }}
+          >
+            Edit recipe
+          </button>
+          <button
+            type="button"
+            className={deleteConfirming ? "" : "secondary"}
+            onClick={() => {
+              if (deleteConfirming) {
+                void onDelete(recipe.id);
+                return;
+              }
+              setDeleteConfirming(true);
+            }}
+          >
+            {deleteConfirming ? "Confirm delete" : "Delete recipe"}
+          </button>
+        </div>
+      </div>
+
+      <div className="recipe-detail-grid">
+        <div className="recipe-detail-primary panel">
+          {recipe.heroImage ? (
+            <img className="recipe-detail-image" src={recipe.heroImage} alt={recipe.title} />
+          ) : (
+            <div className="recipe-detail-image recipe-image-placeholder">No image</div>
+          )}
+          <p>{recipe.summary}</p>
+          <div className="recipe-detail-rating">
+            <span className="muted">Your rating: </span>
+            <StarRating
+              rating={recipe.rating}
+              label={`Rate ${recipe.title}`}
+              onRate={(value) => {
+                setDeleteConfirming(false);
+                void onRate(recipe.id, value);
+              }}
+            />
+          </div>
+          <div className="chip-wrap">
+            {sortedTagIds.map((tagId) => (
+              <span key={tagId} className="chip chip-static">
+                {tagLookup.get(tagId)?.name ?? tagId}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="recipe-detail-secondary">
+          <section className="panel">
+            <h3>Ingredients</h3>
+            <ul>
+              {recipe.ingredients.map((ingredient) => (
+                <li key={ingredient.id}>{ingredient.raw}</li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      </div>
+      <section className="recipe-detail-instructions panel">
+            <h3>Instructions</h3>
+            <ol>
+              {recipe.instructions.map((instruction) => (
+                <li key={instruction}>{instruction}</li>
+              ))}
+            </ol>
+          </section>
+    </section>
+  );
+}
+
+function RecipeCard({
+  recipe,
+  tagLookup,
+  categoryLookup,
+  onEdit,
+  onDelete,
+  onOpenDetail,
+  onRate,
+}: RecipeCardProps) {
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const sortedTagIds = sortTagIdsForPreview(recipe.tagIds, tagLookup, categoryLookup);
+  const hasOverflow = sortedTagIds.length > previewTagLimit;
+  const previewTagIds = hasOverflow
+    ? sortedTagIds.slice(0, previewTagLimit - 1)
+    : sortedTagIds.slice(0, previewTagLimit);
+  const remainingTagCount = Math.max(sortedTagIds.length - previewTagIds.length, 0);
+
+  return (
+    <article
+      className="recipe-card recipe-card-clickable"
+      data-testid={`recipe-card-${recipe.id}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${recipe.title}`}
+      onClick={() => onOpenDetail(recipe.id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpenDetail(recipe.id);
+        }
+      }}
+      onMouseLeave={() => setDeleteConfirming(false)}
+    >
       {recipe.heroImage ? (
         <img className="recipe-image" src={recipe.heroImage} alt={recipe.title} />
       ) : (
         <div className="recipe-image recipe-image-placeholder">No image</div>
       )}
-      <div className="recipe-card-body">
+      <div className="recipe-card-body recipe-card-preview">
         <div className="section-heading">
           <div>
             <h3>{recipe.title}</h3>
@@ -1071,55 +1418,64 @@ function RecipeCard({ recipe, tagLookup, onEdit, onDelete, onRate }: RecipeCardP
               {recipe.servings || "Servings not set"}
             </p>
           </div>
-          <div className="rating-row">
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={value <= recipe.rating ? "star star-active" : "star"}
-                onClick={() => void onRate(recipe.id, value)}
-              >
-                {value}
-              </button>
+          <StarRating
+            rating={recipe.rating}
+            label={`Rate ${recipe.title}`}
+            compact
+            stopPropagation
+            onRate={(value) => {
+              setDeleteConfirming(false);
+              void onRate(recipe.id, value);
+            }}
+          />
+        </div>
+        <p className="recipe-card-summary">{recipe.summary}</p>
+        <div
+          className={
+            remainingTagCount > 0
+              ? "recipe-card-tag-area recipe-card-tag-area-overflow"
+              : "recipe-card-tag-area"
+          }
+        >
+          <div className="chip-wrap recipe-card-tags">
+            {previewTagIds.map((tagId) => (
+              <span key={tagId} className="chip chip-static">
+                {tagLookup.get(tagId)?.name ?? tagId}
+              </span>
             ))}
+            {remainingTagCount > 0 ? (
+              <span className="chip chip-static">+{remainingTagCount} more</span>
+            ) : null}
           </div>
         </div>
-        <p>{recipe.summary}</p>
-        <div className="chip-wrap">
-          {recipe.tagIds.map((tagId) => (
-            <span key={tagId} className="chip chip-static">
-              {tagLookup.get(tagId)?.name ?? tagId}
-            </span>
-          ))}
-        </div>
-        <div className="recipe-columns">
-          <div>
-            <h4>Ingredients</h4>
-            <ul>
-              {recipe.ingredients.map((ingredient) => (
-                <li key={ingredient.id}>{ingredient.raw}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h4>Instructions</h4>
-            <ol>
-              {recipe.instructions.map((instruction) => (
-                <li key={instruction}>{instruction}</li>
-              ))}
-            </ol>
-          </div>
-        </div>
-        <div className="button-row">
-          <button type="button" onClick={() => onEdit(recipe)}>
+        <div className="button-row recipe-card-actions">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setDeleteConfirming(false);
+              onEdit(recipe);
+            }}
+          >
             Edit
           </button>
-          <button type="button" className="secondary" onClick={() => void onDelete(recipe.id)}>
-            Delete
+          <button
+            type="button"
+            className={deleteConfirming ? "" : "secondary"}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (deleteConfirming) {
+                void onDelete(recipe.id);
+                return;
+              }
+              setDeleteConfirming(true);
+            }}
+          >
+            {deleteConfirming ? "Confirm delete" : "Delete"}
           </button>
         </div>
       </div>
-    </>
+    </article>
   );
 }
 

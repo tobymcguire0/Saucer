@@ -1,0 +1,36 @@
+.star-rating {
+  display: inline-flex;
+  gap: 0.2rem;
+  align-items: center;
+}
+
+.star-rating-compact {
+  gap: 0.1rem;
+}
+
+.rating-star {
+  min-width: auto;
+  padding: 0.1rem;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255, 247, 237, 0.35);
+  font-size: 1.5rem;
+  line-height: 1;
+  transform: none;
+}
+
+.star-rating-compact .rating-star {
+  font-size: 1.15rem;
+}
+
+.rating-star:hover,
+.rating-star:focus-visible {
+  background: transparent;
+  color: #fdba74;
+  outline: none;
+  transform: none;
+}
+
+.rating-star-filled {
+  color: #fb923c;
+}

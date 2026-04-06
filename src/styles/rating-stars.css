@@ -26,11 +26,11 @@
 .rating-star:hover,
 .rating-star:focus-visible {
   background: transparent;
-  color: #f9bc60;
+  color: var(--color-accent);
   outline: none;
   transform: none;
 }
 
 .rating-star-filled {
-  color: #e16162;
+  color: var(--color-accent-hover);
 }

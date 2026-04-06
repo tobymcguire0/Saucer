@@ -2,27 +2,27 @@
   --font-family-base: Inter, "Segoe UI", sans-serif;
   --font-size-base: 16px;
   --line-height-base: 1.5;
-  --color-text: #f7f2ea;
-  --color-muted: #c7b7a8;
+  --color-text: #fffffe;
+  --color-muted: #abd1c6;
   --color-background:
-    radial-gradient(circle at top, rgba(226, 116, 253, 0.14), transparent 38%),
-    #171312;
-  --color-panel: rgba(23, 19, 18, 0.88);
-  --color-panel-border: rgba(255, 255, 255, 0.08);
-  --color-input: rgba(255, 255, 255, 0.04);
-  --color-input-border: rgba(255, 255, 255, 0.14);
-  --color-chip: rgba(255, 255, 255, 0.08);
-  --color-accent: #f97316;
-  --color-accent-hover: #ea580c;
-  --color-accent-soft: rgba(249, 115, 22, 0.2);
-  --color-error: rgba(248, 113, 113, 0.9);
-  --color-success: rgba(6, 78, 59, 0.92);
-  --color-danger: rgba(127, 29, 29, 0.94);
+    radial-gradient(circle at top, rgba(249, 188, 96, 0.14), transparent 38%),
+    #004643;
+  --color-panel: rgba(0, 30, 29, 0.72);
+  --color-panel-border: rgba(171, 209, 198, 0.22);
+  --color-input: rgba(171, 209, 198, 0.08);
+  --color-input-border: rgba(171, 209, 198, 0.28);
+  --color-chip: rgba(171, 209, 198, 0.14);
+  --color-accent: #f9bc60;
+  --color-accent-hover: #ffd08a;
+  --color-accent-soft: rgba(249, 188, 96, 0.2);
+  --color-error: rgba(225, 97, 98, 0.92);
+  --color-success: rgba(171, 209, 198, 0.32);
+  --color-danger: rgba(225, 97, 98, 0.92);
   --radius-card: 22px;
   --radius-input: 14px;
   --radius-pill: 999px;
-  --shadow-panel: 0 20px 60px rgba(0, 0, 0, 0.24);
-  --shadow-floating: 0 16px 42px rgba(0, 0, 0, 0.35);
+  --shadow-panel: 0 20px 60px rgba(0, 30, 29, 0.28);
+  --shadow-floating: 0 16px 42px rgba(0, 30, 29, 0.36);
   font-family: var(--font-family-base);
   font-size: var(--font-size-base);
   line-height: var(--line-height-base);
@@ -59,7 +59,7 @@ button {
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
   background: var(--color-accent);
-  color: #fff7ed;
+  color: #001e1d;
   cursor: pointer;
   transition:
     transform 120ms ease,
@@ -79,7 +79,7 @@ button.secondary,
 
 button.secondary:hover,
 .chip:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(171, 209, 198, 0.22);
 }
 
 .button-row,
@@ -123,7 +123,7 @@ button.secondary:hover,
 .chip-active,
 .suggestion-active {
   background: var(--color-accent-soft);
-  border: 1px solid rgba(249, 115, 22, 0.6);
+  border: 1px solid rgba(249, 188, 96, 0.72);
 }
 
 .chip-static {
@@ -171,13 +171,13 @@ select:focus,
 input:focus,
 textarea:focus {
   outline: none;
-  border-color: rgba(249, 115, 22, 0.58);
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.18);
+  border-color: rgba(249, 188, 96, 0.72);
+  box-shadow: 0 0 0 3px rgba(249, 188, 96, 0.18);
 }
 
 select option {
-  background: #171312;
-  color: #f7f2ea;
+  background: #001e1d;
+  color: #fffffe;
 }
 
 textarea {

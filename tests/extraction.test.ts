@@ -62,6 +62,59 @@ Instructions
     expect(draft.sourceRef).toBe("https://example.com/shakshuka");
   });
 
+  it("prefers image URLs over image names in JSON-LD objects", () => {
+    const draft = parseDraftFromWebsiteHtml(
+      `
+        <html>
+          <head>
+            <script type="application/ld+json">
+              {
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Toast",
+                "image": {
+                  "name": "toast.jpg",
+                  "url": "https://cdn.example.com/toast.jpg"
+                },
+                "recipeIngredient": ["2 slices bread"],
+                "recipeInstructions": ["Toast the bread"]
+              }
+            </script>
+          </head>
+          <body></body>
+        </html>
+      `,
+      "https://example.com/toast",
+    );
+
+    expect(draft.heroImage).toBe("https://cdn.example.com/toast.jpg");
+  });
+
+  it("resolves relative website image URLs against the source page", () => {
+    const draft = parseDraftFromWebsiteHtml(
+      `
+        <html>
+          <head>
+            <script type="application/ld+json">
+              {
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Cake",
+                "image": ["/images/cake.jpg"],
+                "recipeIngredient": ["1 cake"],
+                "recipeInstructions": ["Serve the cake"]
+              }
+            </script>
+          </head>
+          <body></body>
+        </html>
+      `,
+      "https://example.com/recipes/cake",
+    );
+
+    expect(draft.heroImage).toBe("https://example.com/images/cake.jpg");
+  });
+
   it("falls back to document text when recipe JSON-LD is missing", () => {
     const draft = parseDraftFromWebsiteHtml(
       `
@@ -89,5 +142,24 @@ Instructions
     expect(draft.heroImage).toBe("https://example.com/soup.jpg");
     expect(draft.ingredientsText).toContain("1 onion");
     expect(draft.instructionsText).toContain("Simmer everything");
+  });
+
+  it("resolves relative og:image URLs in fallback website extraction", () => {
+    const draft = parseDraftFromWebsiteHtml(
+      `
+        <html>
+          <head>
+            <title>Relative Image Soup</title>
+            <meta property="og:image" content="/assets/soup.jpg" />
+          </head>
+          <body>
+            <h1>Relative Image Soup</h1>
+          </body>
+        </html>
+      `,
+      "https://example.com/recipes/soup",
+    );
+
+    expect(draft.heroImage).toBe("https://example.com/assets/soup.jpg");
   });
 });

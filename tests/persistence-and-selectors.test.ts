@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseRecipeMarkdown } from "../src/lib/persistence";
 import { filterRecipes, groupRecipesByCategory } from "../src/lib/selectors";
 import { createDefaultTaxonomy } from "../src/lib/defaultTaxonomy";
-import { createSeedRecipes } from "../src/lib/seedData";
+import type { Recipe } from "../src/lib/models";
 
 describe("obsidian persistence and recipe selectors", () => {
   it("parses markdown recipes with frontmatter and list sections", () => {
@@ -13,7 +13,6 @@ title: "Test Salad"
 summary: "Fresh and crunchy."
 sourceType: "manual"
 sourceRef: ""
-heroImagePath: ""
 servings: "2"
 cuisine: "Mediterranean"
 mealType: "Lunch"
@@ -45,9 +44,28 @@ Fresh and crunchy.
 
   it("filters and groups recipes by canonical tags", () => {
     const taxonomy = createDefaultTaxonomy();
-    const recipes = createSeedRecipes(taxonomy);
     const dinnerTag = taxonomy.tags.find((tag) => tag.name === "Dinner");
     const mealTimeCategory = taxonomy.categories.find((category) => category.name === "Meal-Time");
+    const now = new Date().toISOString();
+    const recipes: Recipe[] = [
+      {
+        id: "recipe-dinner",
+        title: "Dinner Bowl",
+        summary: "Simple dinner recipe.",
+        sourceType: "manual",
+        sourceRef: undefined,
+        heroImage: undefined,
+        ingredients: [{ id: "ingredient-rice", name: "Rice", raw: "1 cup rice" }],
+        instructions: ["Cook rice."],
+        servings: "2",
+        cuisine: "Japanese",
+        mealType: "Dinner",
+        rating: 4,
+        tagIds: [dinnerTag?.id ?? ""].filter(Boolean),
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
 
     expect(dinnerTag).toBeTruthy();
     expect(mealTimeCategory).toBeTruthy();

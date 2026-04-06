@@ -15,7 +15,7 @@
 
 .taxonomy-category {
   padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(171, 209, 198, 0.18);
 }
 
 .taxonomy-tag-list {
@@ -26,7 +26,7 @@
 .taxonomy-tag {
   padding: 0.8rem;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(171, 209, 198, 0.08);
 }
 
 @media (max-width: 720px) {

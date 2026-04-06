@@ -1,6 +1,7 @@
+import { invoke } from "@tauri-apps/api/core";
+
 import { createDefaultTaxonomy, slugify } from "./defaultTaxonomy";
 import type { AppSnapshot, Recipe, Taxonomy } from "./models";
-import { createSeedRecipes } from "./seedData";
 
 interface StorageLike {
   getItem(key: string): string | null;
@@ -9,9 +10,8 @@ interface StorageLike {
 
 interface VaultSnapshot {
   recipeFiles: Record<string, string>;
-  recipePaths: Record<string, string>;
   attachments: Record<string, string>;
-  taxonomy: Taxonomy;
+  taxonomy?: Taxonomy;
 }
 
 const vaultKey = "cookbook:obsidian:vault";
@@ -36,7 +36,6 @@ function serializeRecipe(recipe: Recipe) {
     `summary: ${escapeFrontmatter(recipe.summary)}`,
     `sourceType: ${escapeFrontmatter(recipe.sourceType)}`,
     `sourceRef: ${escapeFrontmatter(recipe.sourceRef ?? "")}`,
-    `heroImagePath: ${escapeFrontmatter(recipe.heroImagePath ?? "")}`,
     `servings: ${escapeFrontmatter(recipe.servings ?? "")}`,
     `cuisine: ${escapeFrontmatter(recipe.cuisine ?? "")}`,
     `mealType: ${escapeFrontmatter(recipe.mealType ?? "")}`,
@@ -116,7 +115,6 @@ export function parseRecipeMarkdown(markdown: string, attachment?: string): Reci
     sourceType: String(frontmatter.get("sourceType") ?? "manual") as Recipe["sourceType"],
     sourceRef: String(frontmatter.get("sourceRef") ?? "") || undefined,
     heroImage: attachment,
-    heroImagePath: String(frontmatter.get("heroImagePath") ?? "") || undefined,
     ingredients: (ingredientsSection?.split("\n").slice(1) ?? [])
       .map((line) => line.trim())
       .filter(Boolean)
@@ -143,45 +141,88 @@ function getLocalStorage(): StorageLike | undefined {
   return typeof window === "undefined" ? undefined : window.localStorage;
 }
 
+function canUseTauri() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+function toAppSnapshot(snapshot: VaultSnapshot): AppSnapshot {
+  return {
+    recipes: Object.entries(snapshot.recipeFiles)
+      .map(([recipeId, markdown]) => parseRecipeMarkdown(markdown, snapshot.attachments[recipeId]))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    taxonomy: snapshot.taxonomy && snapshot.taxonomy.categories.length > 0
+      ? snapshot.taxonomy
+      : createDefaultTaxonomy(),
+  };
+}
+
 export class ObsidianRecipeStore implements RecipeStore {
   constructor(private readonly storage: StorageLike | undefined = getLocalStorage()) {}
 
   private persist(snapshot: VaultSnapshot) {
-    this.storage?.setItem(vaultKey, JSON.stringify(snapshot));
-    return {
-      recipes: Object.entries(snapshot.recipeFiles)
-        .map(([recipeId, markdown]) => parseRecipeMarkdown(markdown, snapshot.attachments[recipeId]))
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
-      taxonomy: snapshot.taxonomy,
+    const normalized: VaultSnapshot = {
+      recipeFiles: snapshot.recipeFiles,
+      attachments: snapshot.attachments,
+      taxonomy: snapshot.taxonomy ?? createDefaultTaxonomy(),
     };
+    this.storage?.setItem(vaultKey, JSON.stringify(normalized));
+    return toAppSnapshot(normalized);
   }
 
   private buildRecipePath(recipe: Recipe) {
     return `recipes/${recipe.id}-${slugify(recipe.title)}.md`;
   }
 
-  private getDefaultSnapshot() {
-    const taxonomy = createDefaultTaxonomy();
-    const recipes = createSeedRecipes(taxonomy);
-    const snapshot: VaultSnapshot = {
+  private getDefaultSnapshot(): VaultSnapshot {
+    return {
       recipeFiles: {},
-      recipePaths: {},
       attachments: {},
-      taxonomy,
+      taxonomy: createDefaultTaxonomy(),
+    };
+  }
+
+  private async loadFromTauri(): Promise<VaultSnapshot> {
+    const snapshot = await invoke<VaultSnapshot>("load_vault_snapshot");
+    return {
+      recipeFiles: snapshot.recipeFiles ?? {},
+      attachments: snapshot.attachments ?? {},
+      taxonomy: snapshot.taxonomy ?? createDefaultTaxonomy(),
+    };
+  }
+
+  private async replaceInTauri(snapshot: VaultSnapshot): Promise<VaultSnapshot> {
+    const normalized: VaultSnapshot = {
+      recipeFiles: snapshot.recipeFiles,
+      attachments: snapshot.attachments,
+      taxonomy: snapshot.taxonomy ?? createDefaultTaxonomy(),
     };
 
-    for (const recipe of recipes) {
-      snapshot.recipeFiles[recipe.id] = serializeRecipe(recipe);
-      snapshot.recipePaths[recipe.id] = this.buildRecipePath(recipe);
-      if (recipe.heroImage) {
-        snapshot.attachments[recipe.id] = recipe.heroImage;
-      }
-    }
+    const nextSnapshot = await invoke<VaultSnapshot>("replace_vault_snapshot", {
+      snapshot: {
+        recipeFiles: normalized.recipeFiles,
+        recipePaths: Object.fromEntries(
+          Object.entries(normalized.recipeFiles).map(([recipeId, markdown]) => [
+            recipeId,
+            this.buildRecipePath(parseRecipeMarkdown(markdown, normalized.attachments[recipeId])),
+          ]),
+        ),
+        attachments: normalized.attachments,
+        taxonomy: normalized.taxonomy,
+      },
+    });
 
-    return snapshot;
+    return {
+      recipeFiles: nextSnapshot.recipeFiles ?? {},
+      attachments: nextSnapshot.attachments ?? {},
+      taxonomy: nextSnapshot.taxonomy ?? createDefaultTaxonomy(),
+    };
   }
 
   async load() {
+    if (canUseTauri()) {
+      return toAppSnapshot(await this.loadFromTauri());
+    }
+
     const raw = this.storage?.getItem(vaultKey);
     if (!raw) {
       return this.persist(this.getDefaultSnapshot());
@@ -199,11 +240,13 @@ export class ObsidianRecipeStore implements RecipeStore {
       createdAt: recipe.createdAt || new Date().toISOString(),
     };
     current.recipeFiles[nextRecipe.id] = serializeRecipe(nextRecipe);
-    current.recipePaths[nextRecipe.id] = this.buildRecipePath(nextRecipe);
     if (nextRecipe.heroImage) {
       current.attachments[nextRecipe.id] = nextRecipe.heroImage;
     } else {
       delete current.attachments[nextRecipe.id];
+    }
+    if (canUseTauri()) {
+      return toAppSnapshot(await this.replaceInTauri(current));
     }
     return this.persist(current);
   }
@@ -211,37 +254,46 @@ export class ObsidianRecipeStore implements RecipeStore {
   async deleteRecipe(recipeId: string) {
     const current = await this.loadRaw();
     delete current.recipeFiles[recipeId];
-    delete current.recipePaths[recipeId];
     delete current.attachments[recipeId];
+    if (canUseTauri()) {
+      return toAppSnapshot(await this.replaceInTauri(current));
+    }
     return this.persist(current);
   }
 
   async saveTaxonomy(taxonomy: Taxonomy) {
     const current = await this.loadRaw();
     current.taxonomy = taxonomy;
+    if (canUseTauri()) {
+      return toAppSnapshot(await this.replaceInTauri(current));
+    }
     return this.persist(current);
   }
 
   async replaceAll(recipes: Recipe[], taxonomy: Taxonomy) {
     const snapshot: VaultSnapshot = {
       recipeFiles: {},
-      recipePaths: {},
       attachments: {},
       taxonomy,
     };
 
     for (const recipe of recipes) {
       snapshot.recipeFiles[recipe.id] = serializeRecipe(recipe);
-      snapshot.recipePaths[recipe.id] = this.buildRecipePath(recipe);
       if (recipe.heroImage) {
         snapshot.attachments[recipe.id] = recipe.heroImage;
       }
     }
 
+    if (canUseTauri()) {
+      return toAppSnapshot(await this.replaceInTauri(snapshot));
+    }
     return this.persist(snapshot);
   }
 
-  private async loadRaw() {
+  private async loadRaw(): Promise<VaultSnapshot> {
+    if (canUseTauri()) {
+      return this.loadFromTauri();
+    }
     const raw = this.storage?.getItem(vaultKey);
     return raw ? (JSON.parse(raw) as VaultSnapshot) : this.getDefaultSnapshot();
   }

@@ -62,6 +62,51 @@ function inferFromKeywords(input: unknown, values: readonly string[]) {
   return values.find((value) => normalized.includes(value.toLowerCase())) ?? "";
 }
 
+function resolveUrl(value: string, sourceUrl: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.startsWith("data:")) {
+    return trimmed;
+  }
+
+  try {
+    return new URL(trimmed, sourceUrl).toString();
+  } catch {
+    return "";
+  }
+}
+
+function extractImageUrl(value: unknown, sourceUrl: string): string {
+  if (typeof value === "string") {
+    return resolveUrl(value, sourceUrl);
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const candidate = extractImageUrl(entry, sourceUrl);
+      if (candidate) {
+        return candidate;
+      }
+    }
+    return "";
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return (
+      extractImageUrl(record.url, sourceUrl) ||
+      extractImageUrl(record.contentUrl, sourceUrl) ||
+      extractImageUrl(record.thumbnailUrl, sourceUrl) ||
+      ""
+    );
+  }
+
+  return "";
+}
+
 function cleanLines(input: string) {
   return input
     .split(/\r?\n/)
@@ -175,7 +220,7 @@ export function parseDraftFromWebsiteHtml(html: string, sourceUrl: string) {
   if (jsonLdRecipe) {
     draft.title = toText(jsonLdRecipe.name) || "Imported recipe";
     draft.summary = toText(jsonLdRecipe.description);
-    draft.heroImage = toText(jsonLdRecipe.image);
+    draft.heroImage = extractImageUrl(jsonLdRecipe.image, sourceUrl);
     draft.ingredientsText = jsonLdRecipe.recipeIngredient?.join("\n") ?? "";
     draft.instructionsText = Array.isArray(jsonLdRecipe.recipeInstructions)
       ? jsonLdRecipe.recipeInstructions
@@ -201,8 +246,10 @@ export function parseDraftFromWebsiteHtml(html: string, sourceUrl: string) {
     sourceRef: sourceUrl,
     title: document.title || fallbackDraft.title,
     summary: fallbackDraft.summary || "Fallback extraction from page text.",
-    heroImage:
+    heroImage: extractImageUrl(
       document.querySelector('meta[property="og:image"]')?.getAttribute("content") ?? "",
+      sourceUrl,
+    ),
   };
 }
 

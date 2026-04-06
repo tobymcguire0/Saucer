@@ -32,7 +32,6 @@ export interface Recipe {
   sourceType: SourceType;
   sourceRef?: string;
   heroImage?: string;
-  heroImagePath?: string;
   ingredients: Ingredient[];
   instructions: string[];
   servings?: string;

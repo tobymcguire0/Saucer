@@ -3,17 +3,6 @@ import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 
 import type { Recipe, RecipeQuery, Taxonomy } from "./models";
 
-interface StorageLike {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-}
-
-const indexKey = "cookbook:sqlite:index";
-
-function getLocalStorage(): StorageLike | undefined {
-  return typeof window === "undefined" ? undefined : window.localStorage;
-}
-
 let sqlPromise: Promise<SqlJsStatic> | undefined;
 
 function loadSql() {
@@ -26,23 +15,6 @@ function loadSql() {
   return sqlPromise;
 }
 
-function encodeBytes(bytes: Uint8Array) {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
-}
-
-function decodeBytes(encoded: string) {
-  const binary = atob(encoded);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
-}
-
 function escapeLike(value: string) {
   return `%${value.replace(/[%_]/g, "\\$&")}%`;
 }
@@ -50,16 +22,13 @@ function escapeLike(value: string) {
 export class SqliteSearchIndex {
   private db: Database | undefined;
 
-  constructor(private readonly storage: StorageLike | undefined = getLocalStorage()) {}
-
   private async ensureDb() {
     if (this.db) {
       return this.db;
     }
 
     const SQL = await loadSql();
-    const persisted = this.storage?.getItem(indexKey);
-    this.db = persisted ? new SQL.Database(decodeBytes(persisted)) : new SQL.Database();
+    this.db = new SQL.Database();
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS recipes (
         id TEXT PRIMARY KEY,
@@ -82,14 +51,6 @@ export class SqliteSearchIndex {
       CREATE INDEX IF NOT EXISTS idx_recipe_tags_tag_id ON recipe_tags(tag_id);
     `);
     return this.db;
-  }
-
-  private persist() {
-    if (!this.db || !this.storage) {
-      return;
-    }
-
-    this.storage.setItem(indexKey, encodeBytes(this.db.export()));
   }
 
   async rebuild(recipes: Recipe[], taxonomy: Taxonomy) {
@@ -133,7 +94,6 @@ export class SqliteSearchIndex {
     insertRecipe.free();
     insertTag.free();
     insertRecipeTag.free();
-    this.persist();
   }
 
   async queryRecipeIds(query: RecipeQuery) {

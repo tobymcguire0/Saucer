@@ -187,6 +187,40 @@ describe("recipe browse and detail UI", () => {
     expect(screen.getByTestId("status-bar").textContent).toContain("Recipe deleted.");
   });
 
+  it("opens the random recipe in the detail view", async () => {
+    const taxonomy = createDefaultTaxonomy();
+    const now = new Date().toISOString();
+    const recipe: Recipe = {
+      id: "recipe-random-test",
+      title: "Random Test",
+      summary: "A recipe used to verify random recipe navigation.",
+      sourceType: "manual",
+      ingredients: [{ id: "ingredient-1", name: "Rice", raw: "1 cup rice" }],
+      instructions: ["Cook the rice."],
+      servings: "2 people",
+      cuisine: "Japanese",
+      mealType: "Dinner",
+      rating: 0,
+      tagIds: [findTagId(taxonomy, "Meal-Time", "Dinner")],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await seedRecipe(recipe, taxonomy);
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Pick random recipe" })).toBeTruthy(),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Pick random recipe" }));
+
+    const detailView = await screen.findByTestId("recipe-detail-view");
+    expect(within(detailView).getByText("Random Test")).toBeTruthy();
+  });
+
   it("highlights the active workspace button with nav-active class", async () => {
     render(<App />);
 

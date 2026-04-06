@@ -436,11 +436,13 @@ function App() {
         .filter(Boolean),
     });
     setRandomRecipeId(recipe?.id ?? "");
+    if (recipe) {
+      openRecipeDetail(recipe.id);
+      return;
+    }
     updateStatus(
-      recipe
-        ? `Random recipe ready: ${recipe.title}`
-        : "No recipe matches the current random selection criteria.",
-      recipe ? "success" : "error",
+      "No recipe matches the current random selection criteria.",
+      "error",
     );
   }
 

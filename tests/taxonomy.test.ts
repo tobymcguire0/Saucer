@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { createDefaultTaxonomy } from "../src/lib/defaultTaxonomy";
+import type { Recipe } from "../src/lib/models";
 import { resolveTagSuggestion, upsertCategory, upsertTag, addAlias, mergeTags } from "../src/lib/taxonomy";
-import { createSeedRecipes } from "../src/lib/seedData";
 
 describe("taxonomy matching", () => {
   it("maps alias and misspelling inputs back to canonical tags", () => {
@@ -36,9 +36,26 @@ describe("taxonomy matching", () => {
 
   it("merges source tags into target tags and rewrites recipe assignments", () => {
     const taxonomy = createDefaultTaxonomy();
-    const recipes = createSeedRecipes(taxonomy);
     const dinnerTag = taxonomy.tags.find((tag) => tag.name === "Dinner");
     const lunchTag = taxonomy.tags.find((tag) => tag.name === "Lunch");
+    const now = new Date().toISOString();
+    const recipes: Recipe[] = [
+      {
+        id: "recipe-lunch",
+        title: "Lunch Plate",
+        summary: "Simple lunch recipe.",
+        sourceType: "manual",
+        ingredients: [{ id: "ingredient-1", name: "Bread", raw: "2 slices bread" }],
+        instructions: ["Toast the bread."],
+        servings: "1",
+        cuisine: "American",
+        mealType: "Lunch",
+        rating: 0,
+        tagIds: [lunchTag?.id ?? ""].filter(Boolean),
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
 
     expect(dinnerTag).toBeTruthy();
     expect(lunchTag).toBeTruthy();

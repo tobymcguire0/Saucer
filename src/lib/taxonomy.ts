@@ -373,7 +373,6 @@ export function convertDraftToRecipe(draft: RecipeDraft) {
     sourceType: draft.sourceType,
     sourceRef: draft.sourceRef.trim() || undefined,
     heroImage: draft.heroImage,
-    heroImagePath: draft.heroImage ? `assets/${recipeId}.txt` : undefined,
     ingredients,
     instructions,
     servings: draft.servings.trim() || undefined,

@@ -13,7 +13,7 @@
   padding: 0.1rem;
   border-radius: 0;
   background: transparent;
-  color: rgba(255, 247, 237, 0.35);
+  color: rgba(171, 209, 198, 0.45);
   font-size: 1.5rem;
   line-height: 1;
   transform: none;
@@ -26,11 +26,11 @@
 .rating-star:hover,
 .rating-star:focus-visible {
   background: transparent;
-  color: #fdba74;
+  color: #f9bc60;
   outline: none;
   transform: none;
 }
 
 .rating-star-filled {
-  color: #fb923c;
+  color: #e16162;
 }

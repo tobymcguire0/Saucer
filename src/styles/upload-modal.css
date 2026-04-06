@@ -4,7 +4,7 @@
   display: grid;
   place-items: center;
   padding: 1.5rem;
-  background: rgba(10, 8, 7, 0.68);
+  background: rgba(0, 30, 29, 0.72);
   z-index: 20;
 }
 
@@ -29,7 +29,7 @@
 
 .upload_content {
   margin-top: 0.75rem;
-  border: 1px solid rgba(249, 115, 22, 0.6);
+  border: 1px solid rgba(249, 188, 96, 0.6);
   border-radius: 16px;
   padding: 0.75rem;
   transition:
@@ -39,7 +39,7 @@
 
 .upload_content-error {
   border-color: var(--color-error);
-  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.35);
+  box-shadow: 0 0 0 1px rgba(225, 97, 98, 0.35);
   animation: upload-shake 220ms ease-in-out;
 }
 
@@ -57,8 +57,8 @@
   min-width: 160px;
   border-radius: 16px;
   padding: 0.75rem 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(171, 209, 198, 0.16);
+  background: rgba(171, 209, 198, 0.08);
 }
 
 .draft-tag-row {

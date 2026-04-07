@@ -1,4 +1,8 @@
-export type SourceType = "website" | "photo" | "text" | "manual";
+export const sourceTypes = ["website", "photo", "text", "manual"] as const;
+export type SourceType = (typeof sourceTypes)[number];
+
+export const recipeSortOptions = ["updated", "title", "rating", "cuisine", "mealType"] as const;
+export type RecipeSort = (typeof recipeSortOptions)[number];
 
 export interface Category {
   id: string;
@@ -66,7 +70,6 @@ export interface RecipeDraft {
   cuisine: string;
   mealType: string;
   selectedTagIds: string[];
-  suggestedTags: TagSuggestion[];
 }
 
 export interface RecipeQuery {
@@ -74,7 +77,7 @@ export interface RecipeQuery {
   selectedTagIds: string[];
   excludedTagIds: string[];
   requiredIngredientTerms: string[];
-  sortBy: "updated" | "title" | "rating" | "cuisine" | "mealType";
+  sortBy: RecipeSort;
 }
 
 export interface RandomRecipeRequest {

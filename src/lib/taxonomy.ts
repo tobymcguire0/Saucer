@@ -347,6 +347,36 @@ export function buildTagSuggestions(
   return [...unique.values()].sort((left, right) => right.confidence - left.confidence);
 }
 
+export const draftSuggestionConfidenceThreshold = 0.5;
+
+export function filterDraftSuggestionsByConfidence(
+  suggestions: TagSuggestion[],
+  minimumConfidence = draftSuggestionConfidenceThreshold,
+) {
+  return suggestions.filter(
+    (suggestion) => Boolean(suggestion.tagId) && suggestion.confidence >= minimumConfidence,
+  );
+}
+
+export function getAutoSelectedDraftTagIds(
+  suggestions: TagSuggestion[],
+  minimumConfidence = draftSuggestionConfidenceThreshold,
+) {
+  return filterDraftSuggestionsByConfidence(suggestions, minimumConfidence)
+    .map((suggestion) => suggestion.tagId)
+    .filter((tagId): tagId is string => Boolean(tagId));
+}
+
+export function getVisibleDraftTagIds(
+  selectedTagIds: string[],
+  suggestions: TagSuggestion[],
+  minimumConfidence = draftSuggestionConfidenceThreshold,
+) {
+  return [
+    ...new Set([...selectedTagIds, ...getAutoSelectedDraftTagIds(suggestions, minimumConfidence)]),
+  ];
+}
+
 export function convertDraftToRecipe(draft: RecipeDraft) {
   const now = new Date().toISOString();
   const recipeId = draft.id ?? `recipe-${crypto.randomUUID()}`;
@@ -391,14 +421,13 @@ export function createEmptyDraft(sourceType: RecipeDraft["sourceType"] = "manual
     summary: "",
     sourceType,
     sourceRef: "",
-    heroImage: "",
+    heroImage: undefined,
     ingredientsText: "",
     instructionsText: "",
     servings: "",
     cuisine: "",
     mealType: "",
     selectedTagIds: [],
-    suggestedTags: [],
   };
 }
 

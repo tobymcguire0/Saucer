@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { createDefaultTaxonomy, slugify } from "./defaultTaxonomy";
 import type { AppSnapshot, Recipe, Taxonomy } from "./models";
+import { isSourceType } from "./typeGuards";
 
 interface StorageLike {
   getItem(key: string): string | null;
@@ -75,6 +76,76 @@ function parseFrontmatterValue(raw: string) {
   }
 }
 
+function createFallbackVaultSnapshot(): VaultSnapshot {
+  return {
+    recipeFiles: {},
+    attachments: {},
+    taxonomy: createDefaultTaxonomy(),
+  };
+}
+
+function normalizeStringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}
+
+function isTaxonomy(value: unknown): value is Taxonomy {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "categories" in value &&
+      Array.isArray(value.categories) &&
+      "tags" in value &&
+      Array.isArray(value.tags),
+  );
+}
+
+function normalizeVaultSnapshot(value: unknown): VaultSnapshot {
+  const fallback = createFallbackVaultSnapshot();
+
+  if (!value || typeof value !== "object") {
+    return fallback;
+  }
+
+  const snapshot = value as Partial<VaultSnapshot>;
+  return {
+    recipeFiles: normalizeStringRecord(snapshot.recipeFiles),
+    attachments: normalizeStringRecord(snapshot.attachments),
+    taxonomy: isTaxonomy(snapshot.taxonomy) ? snapshot.taxonomy : fallback.taxonomy,
+  };
+}
+
+function parseVaultSnapshot(raw: string | null | undefined): VaultSnapshot {
+  if (!raw) {
+    return createFallbackVaultSnapshot();
+  }
+
+  try {
+    return normalizeVaultSnapshot(JSON.parse(raw));
+  } catch {
+    return createFallbackVaultSnapshot();
+  }
+}
+
+function parseSourceType(value: string | string[] | undefined) {
+  return typeof value === "string" && isSourceType(value) ? value : "manual";
+}
+
+function parseFrontmatterString(frontmatter: Map<string, string | string[]>, key: string) {
+  const value = frontmatter.get(key);
+  return typeof value === "string" ? value : "";
+}
+
+function parseFrontmatterStringList(frontmatter: Map<string, string | string[]>, key: string) {
+  const value = frontmatter.get(key);
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
 export function parseRecipeMarkdown(markdown: string, attachment?: string): Recipe {
   const [, frontmatterBlock = "", body = ""] =
     markdown.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/) ?? [];
@@ -107,19 +178,19 @@ export function parseRecipeMarkdown(markdown: string, attachment?: string): Reci
   const instructionsSection = sections.find((section) => section.startsWith("Instructions"));
 
   return {
-    id: String(frontmatter.get("id") ?? crypto.randomUUID()),
-    title: String(frontmatter.get("title") ?? "Untitled recipe"),
+    id: parseFrontmatterString(frontmatter, "id") || crypto.randomUUID(),
+    title: parseFrontmatterString(frontmatter, "title") || "Untitled recipe",
     summary:
       summarySection?.replace(/^Summary\s*/, "").trim() ??
-      String(frontmatter.get("summary") ?? ""),
-    sourceType: String(frontmatter.get("sourceType") ?? "manual") as Recipe["sourceType"],
-    sourceRef: String(frontmatter.get("sourceRef") ?? "") || undefined,
+      parseFrontmatterString(frontmatter, "summary"),
+    sourceType: parseSourceType(frontmatter.get("sourceType")),
+    sourceRef: parseFrontmatterString(frontmatter, "sourceRef") || undefined,
     heroImage: attachment,
     ingredients: (ingredientsSection?.split("\n").slice(1) ?? [])
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => ({
-        id: `${String(frontmatter.get("id") ?? "recipe")}-${slugify(line)}`,
+        id: `${parseFrontmatterString(frontmatter, "id") || "recipe"}-${slugify(line)}`,
         name: line.replace(/^-\s*/, ""),
         raw: line.replace(/^-\s*/, ""),
       })),
@@ -127,13 +198,13 @@ export function parseRecipeMarkdown(markdown: string, attachment?: string): Reci
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => line.replace(/^\d+[.)]\s*/, "")),
-    servings: String(frontmatter.get("servings") ?? "") || undefined,
-    cuisine: String(frontmatter.get("cuisine") ?? "") || undefined,
-    mealType: String(frontmatter.get("mealType") ?? "") || undefined,
+    servings: parseFrontmatterString(frontmatter, "servings") || undefined,
+    cuisine: parseFrontmatterString(frontmatter, "cuisine") || undefined,
+    mealType: parseFrontmatterString(frontmatter, "mealType") || undefined,
     rating: Number(frontmatter.get("rating") ?? 0),
-    tagIds: (frontmatter.get("tags") as string[] | undefined) ?? [],
-    createdAt: String(frontmatter.get("createdAt") ?? new Date().toISOString()),
-    updatedAt: String(frontmatter.get("updatedAt") ?? new Date().toISOString()),
+    tagIds: parseFrontmatterStringList(frontmatter, "tags"),
+    createdAt: parseFrontmatterString(frontmatter, "createdAt") || new Date().toISOString(),
+    updatedAt: parseFrontmatterString(frontmatter, "updatedAt") || new Date().toISOString(),
   };
 }
 
@@ -174,11 +245,7 @@ export class ObsidianRecipeStore implements RecipeStore {
   }
 
   private getDefaultSnapshot(): VaultSnapshot {
-    return {
-      recipeFiles: {},
-      attachments: {},
-      taxonomy: createDefaultTaxonomy(),
-    };
+    return createFallbackVaultSnapshot();
   }
 
   private async loadFromTauri(): Promise<VaultSnapshot> {
@@ -228,7 +295,7 @@ export class ObsidianRecipeStore implements RecipeStore {
       return this.persist(this.getDefaultSnapshot());
     }
 
-    const snapshot = JSON.parse(raw) as VaultSnapshot;
+    const snapshot = parseVaultSnapshot(raw);
     return this.persist(snapshot);
   }
 
@@ -295,6 +362,6 @@ export class ObsidianRecipeStore implements RecipeStore {
       return this.loadFromTauri();
     }
     const raw = this.storage?.getItem(vaultKey);
-    return raw ? (JSON.parse(raw) as VaultSnapshot) : this.getDefaultSnapshot();
+    return parseVaultSnapshot(raw);
   }
 }

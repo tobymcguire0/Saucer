@@ -1,8 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import type { RecipeDraft, SourceType } from "./models";
-import { buildTagSuggestions, createEmptyDraft } from "./taxonomy";
-import type { Taxonomy } from "./models";
+import type { SourceType } from "./models";
+import { createEmptyDraft } from "./taxonomy";
 
 const cuisineHints = [
   "Italian",
@@ -294,11 +293,4 @@ export async function extractDraftFromPhoto(file: File) {
   draft.mealType = inferFromKeywords(file.name, mealTypeHints);
   draft.cuisine = inferFromKeywords(file.name, cuisineHints);
   return draft;
-}
-
-export function hydrateDraftSuggestions(draft: RecipeDraft, taxonomy: Taxonomy) {
-  return {
-    ...draft,
-    suggestedTags: buildTagSuggestions(draft, taxonomy),
-  };
 }

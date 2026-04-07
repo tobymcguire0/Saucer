@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { parseRecipeMarkdown } from "../src/lib/persistence";
+import { ObsidianRecipeStore, parseRecipeMarkdown } from "../src/lib/persistence";
 import { filterRecipes, groupRecipesByCategory } from "../src/lib/selectors";
 import { createDefaultTaxonomy } from "../src/lib/defaultTaxonomy";
 import type { Recipe } from "../src/lib/models";
@@ -40,6 +40,41 @@ Fresh and crunchy.
     expect(recipe.title).toBe("Test Salad");
     expect(recipe.ingredients).toHaveLength(2);
     expect(recipe.instructions[0]).toBe("Toss together.");
+  });
+
+  it("falls back to manual source type for invalid recipe frontmatter values", () => {
+    const recipe = parseRecipeMarkdown(`---
+id: "recipe-2"
+title: "Questionable Import"
+summary: "Unexpected source type."
+sourceType: "desktop"
+createdAt: "2026-04-05T00:00:00.000Z"
+updatedAt: "2026-04-05T00:00:00.000Z"
+tags: []
+---
+
+# Questionable Import
+
+## Ingredients
+- 1 mystery item
+
+## Instructions
+1. Save it anyway.
+`);
+
+    expect(recipe.sourceType).toBe("manual");
+  });
+
+  it("recovers from malformed stored vault snapshots", async () => {
+    const store = new ObsidianRecipeStore({
+      getItem: vi.fn(() => "{not-json"),
+      setItem: vi.fn(),
+    });
+
+    const snapshot = await store.load();
+
+    expect(snapshot.recipes).toEqual([]);
+    expect(snapshot.taxonomy.categories.length).toBeGreaterThan(0);
   });
 
   it("filters and groups recipes by canonical tags", () => {

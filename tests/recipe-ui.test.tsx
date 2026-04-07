@@ -268,4 +268,36 @@ describe("recipe browse and detail UI", () => {
     const fusionButtons = screen.getAllByRole("button", { name: "Fusion" });
     expect(fusionButtons.some((button) => button.className.includes("chip-active"))).toBe(true);
   });
+
+  it("shows only relevant draft taxonomy chips above the confidence threshold", async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Upload Recipe" }));
+    await user.click(screen.getByRole("button", { name: "manual" }));
+    await user.type(screen.getByLabelText("Cuisine"), "Italian");
+    await user.type(screen.getByLabelText("Meal type"), "Dinner");
+    await user.type(screen.getByLabelText("Ingredients"), "300g spaghetti{enter}1 dragonfruit");
+
+    const editAssignedTags = screen.getByText("Edit assigned tags").closest("section");
+    const suggestedTags = screen.getByText("Suggested tags").closest("section");
+
+    expect(editAssignedTags).toBeTruthy();
+    expect(suggestedTags).toBeTruthy();
+
+    const editScope = within(editAssignedTags!);
+    const suggestionScope = within(suggestedTags!);
+
+    expect(editScope.getByRole("button", { name: "Italian" })).toBeTruthy();
+    expect(editScope.getByRole("button", { name: "Dinner" })).toBeTruthy();
+    expect(editScope.getByRole("button", { name: "Pasta" })).toBeTruthy();
+    expect(editScope.queryByRole("button", { name: "Japanese" })).toBeNull();
+    expect(editScope.queryByRole("button", { name: "Breakfast" })).toBeNull();
+    expect(suggestionScope.queryByRole("button", { name: /dragonfruit/i })).toBeNull();
+  });
 });

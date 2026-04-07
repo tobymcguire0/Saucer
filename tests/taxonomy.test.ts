@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { createDefaultTaxonomy } from "../src/lib/defaultTaxonomy";
-import type { Recipe } from "../src/lib/models";
-import { resolveTagSuggestion, upsertCategory, upsertTag, addAlias, mergeTags } from "../src/lib/taxonomy";
+import type { Recipe, TagSuggestion } from "../src/lib/models";
+import {
+  addAlias,
+  getAutoSelectedDraftTagIds,
+  getVisibleDraftTagIds,
+  mergeTags,
+  resolveTagSuggestion,
+  upsertCategory,
+  upsertTag,
+} from "../src/lib/taxonomy";
 
 describe("taxonomy matching", () => {
   it("maps alias and misspelling inputs back to canonical tags", () => {
@@ -64,5 +72,31 @@ describe("taxonomy matching", () => {
 
     expect(merged.taxonomy.tags.some((tag) => tag.id === lunchTag!.id)).toBe(false);
     expect(merged.taxonomy.tags.find((tag) => tag.id === dinnerTag!.id)?.aliases).toContain("Lunch");
+  });
+
+  it("filters draft tag suggestions below the 50 percent confidence threshold", () => {
+    const suggestions: TagSuggestion[] = [
+      {
+        input: "pasta",
+        normalized: "pasta",
+        categoryId: "category-ingredients",
+        status: "exact",
+        confidence: 1,
+        tagId: "tag-pasta",
+        matchedName: "Pasta",
+      },
+      {
+        input: "maybe beef",
+        normalized: "maybe beef",
+        categoryId: "category-protein",
+        status: "fuzzy",
+        confidence: 0.49,
+        tagId: "tag-beef",
+        matchedName: "Beef",
+      },
+    ];
+
+    expect(getAutoSelectedDraftTagIds(suggestions)).toEqual(["tag-pasta"]);
+    expect(getVisibleDraftTagIds(["tag-saved"], suggestions)).toEqual(["tag-saved", "tag-pasta"]);
   });
 });

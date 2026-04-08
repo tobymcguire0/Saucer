@@ -1,21 +1,17 @@
-type StatusTone = "info" | "success" | "error";
+import { useStatusContext } from "../context/status-context";
 
-type StatusBarProps = {
-  message: string;
-  tone: StatusTone;
-  expanded: boolean;
-};
+function StatusBar() {
+  const { statusMessage, statusTone, statusExpanded } = useStatusContext();
 
-function StatusBar({ message, tone, expanded }: StatusBarProps) {
   return (
     <div
-      className={`status-bar status-bar-${tone}${expanded ? " status-bar-expanded" : ""}`}
+      className={`status-bar status-bar-${statusTone}${statusExpanded ? " status-bar-expanded" : ""}`}
       role="status"
       aria-live="polite"
       data-testid="status-bar"
     >
       <span className="status-bar-label">Status</span>
-      <span className="status-bar-message">{message}</span>
+      <span className="status-bar-message">{statusMessage}</span>
     </div>
   );
 }

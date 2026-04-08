@@ -38,8 +38,8 @@ const defaultCategorySeed = [
       { name: "Pasta", aliases: ["spaghetti", "linguine", "macaroni", "penne", "sphagetti"] },
       { name: "Rice", aliases: ["jasmine rice", "basmati"] },
       { name: "Chicken", aliases: [] },
-      { name: "Beef", aliases: [] },
-      { name: "Pork", aliases: [] },
+      { name: "Beef", aliases: ["hamburger"] },
+      { name: "Pork", aliases: ["chorizo"] },
       { name: "Fish", aliases: ["salmon", "cod", "tuna"] },
       { name: "Tomato", aliases: ["tomatoes"] },
       { name: "Olive", aliases: ["olives"] },
@@ -49,18 +49,6 @@ const defaultCategorySeed = [
       { name: "Tofu", aliases: [] },
       { name: "Mushroom", aliases: ["mushrooms"] },
       { name: "Bread", aliases: ["toast", "bun"] },
-    ],
-  },
-  {
-    name: "Protein",
-    description: "Primary protein signal for the dish.",
-    tags: [
-      { name: "Vegetarian", aliases: [] },
-      { name: "Chicken", aliases: [] },
-      { name: "Beef", aliases: [] },
-      { name: "Pork", aliases: [] },
-      { name: "Seafood", aliases: ["fish", "shrimp", "prawn"] },
-      { name: "Tofu", aliases: [] },
     ],
   },
   {
@@ -99,15 +87,6 @@ const defaultCategorySeed = [
       { name: "Soup", aliases: [] },
       { name: "Salad", aliases: [] },
       { name: "Dessert", aliases: [] },
-    ],
-  },
-  {
-    name: "Difficulty",
-    description: "Effort level for the recipe.",
-    tags: [
-      { name: "Easy", aliases: [] },
-      { name: "Medium", aliases: ["moderate"] },
-      { name: "Hard", aliases: ["advanced"] },
     ],
   },
   {

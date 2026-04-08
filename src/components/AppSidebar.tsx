@@ -1,42 +1,34 @@
-import { recipeSortOptions, type Recipe, type RecipeQuery, type RecipeSort } from "../lib/models";
-import type { TaxonomyCategoryGroup } from "../lib/taxonomyView";
+import { useAppShellContext } from "../context/app-shell-context";
+import { useRecipeEditorContext } from "../context/recipe-editor-context";
+import { useSearchContext } from "../context/search-context";
+import { useTaxonomyFilterUiContext } from "../context/taxonomy-filter-ui-context";
+import { useTaxonomyContext } from "../context/taxonomy-context";
+import TaxonomyCategoryPicker from "./taxonomy/TaxonomyCategoryPicker";
+import { recipeSortOptions } from "../lib/models";
+import { searchTags } from "../lib/taxonomy";
 import { isRecipeSort } from "../lib/typeGuards";
 
-type AppView = "recipes" | "taxonomy" | "recipeDetail";
+const sidebarTagSearchKey = "__all__";
 
-type AppSidebarProps = {
-  activeView: AppView;
-  query: RecipeQuery;
-  taxonomyGroups: TaxonomyCategoryGroup[];
-  groupByCategoryId: string;
-  randomIngredientInput: string;
-  selectedRandomRecipe?: Recipe;
-  onUploadRecipe: () => void;
-  onViewChange: (view: AppView) => void;
-  onSearchTextChange: (searchText: string) => void;
-  onSortChange: (sortBy: RecipeSort) => void;
-  onGroupByCategoryChange: (categoryId: string) => void;
-  onRandomIngredientInputChange: (value: string) => void;
-  onToggleFilterTag: (tagId: string) => void;
-  onChooseRandomRecipe: () => void;
-};
+function AppSidebar() {
+  const { activeView, setActiveWorkspace } = useAppShellContext();
+  const { openCreateEditor } = useRecipeEditorContext();
+  const {
+    query,
+    groupByCategoryId,
+    randomIngredientInput,
+    updateSearchText,
+    updateSortBy,
+    updateGroupByCategory,
+    updateRandomIngredientSearch,
+    toggleFilterTag,
+    chooseRandomRecipe,
+  } = useSearchContext();
+  const { sidebarCategoryInputs, setCategoryInput } = useTaxonomyFilterUiContext();
+  const { taxonomy, taxonomyGroups, categoryLookup } = useTaxonomyContext();
+  const sidebarTagInput = sidebarCategoryInputs[sidebarTagSearchKey] ?? "";
+  const selectedSidebarTags = taxonomy.tags.filter((tag) => query.selectedTagIds.includes(tag.id));
 
-function AppSidebar({
-  activeView,
-  query,
-  taxonomyGroups,
-  groupByCategoryId,
-  randomIngredientInput,
-  selectedRandomRecipe,
-  onUploadRecipe,
-  onViewChange,
-  onSearchTextChange,
-  onSortChange,
-  onGroupByCategoryChange,
-  onRandomIngredientInputChange,
-  onToggleFilterTag,
-  onChooseRandomRecipe,
-}: AppSidebarProps) {
   return (
     <aside className="sidebar">
       <div className="sidebar-section">
@@ -44,7 +36,7 @@ function AppSidebar({
         <h1>Recipe aggregator</h1>
         <p className="muted">Upload, Save, and Search Recipes.</p>
         <div className="button-row">
-          <button type="button" onClick={onUploadRecipe}>
+          <button type="button" onClick={() => openCreateEditor("website")}>
             Upload Recipe
           </button>
         </div>
@@ -56,18 +48,36 @@ function AppSidebar({
                 ? "secondary nav-active"
                 : "secondary"
             }
-            onClick={() => onViewChange("recipes")}
+            onClick={() => setActiveWorkspace("recipes")}
           >
             Browse recipes
           </button>
           <button
             type="button"
             className={activeView === "taxonomy" ? "secondary nav-active" : "secondary"}
-            onClick={() => onViewChange("taxonomy")}
+            onClick={() => setActiveWorkspace("taxonomy")}
           >
             Manage taxonomy
           </button>
         </div>
+      </div>
+
+      <div className="sidebar-section">
+        <div className="section-heading">
+          <h2>Random dish</h2>
+        </div>
+        <p className="muted">Uses your active tag filters plus optional ingredient keywords.</p>
+        <label className="field">
+          <span>Required ingredients</span>
+          <input
+            value={randomIngredientInput}
+            onChange={(event) => updateRandomIngredientSearch(event.currentTarget.value)}
+            placeholder="egg, rice, tomato"
+          />
+        </label>
+        <button type="button" onClick={chooseRandomRecipe}>
+          Pick random recipe
+        </button>
       </div>
 
       <div className="sidebar-section">
@@ -78,7 +88,7 @@ function AppSidebar({
           <span>Search</span>
           <input
             value={query.searchText}
-            onChange={(event) => onSearchTextChange(event.currentTarget.value)}
+            onChange={(event) => updateSearchText(event.currentTarget.value)}
             placeholder="Search title, ingredients, or instructions"
           />
         </label>
@@ -91,7 +101,7 @@ function AppSidebar({
               onChange={(event) => {
                 const { value } = event.currentTarget;
                 if (isRecipeSort(value)) {
-                  onSortChange(value);
+                  updateSortBy(value);
                 }
               }}
             >
@@ -110,7 +120,7 @@ function AppSidebar({
             <span>Group by</span>
             <select
               value={groupByCategoryId}
-              onChange={(event) => onGroupByCategoryChange(event.currentTarget.value)}
+              onChange={(event) => updateGroupByCategory(event.currentTarget.value)}
             >
               <option value="">No grouping</option>
               {taxonomyGroups.map(({ category }) => (
@@ -123,48 +133,21 @@ function AppSidebar({
         </div>
 
         <div className="filter-groups">
-          {taxonomyGroups.map(({ category, tags }) => (
-            <section key={category.id} className="filter-group">
-              <h3>{category.name}</h3>
-              <div className="chip-wrap">
-                {tags.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    className={query.selectedTagIds.includes(tag.id) ? "chip chip-active" : "chip"}
-                    onClick={() => onToggleFilterTag(tag.id)}
-                  >
-                    {tag.name}
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      </div>
-
-      <div className="sidebar-section">
-        <div className="section-heading">
-          <h2>Random dish</h2>
-        </div>
-        <p className="muted">Uses your active tag filters plus optional ingredient keywords.</p>
-        <label className="field">
-          <span>Required ingredients</span>
-          <input
-            value={randomIngredientInput}
-            onChange={(event) => onRandomIngredientInputChange(event.currentTarget.value)}
-            placeholder="egg, rice, tomato"
+          <TaxonomyCategoryPicker
+            categoryName="Tags"
+            inputValue={sidebarTagInput}
+            selectedTags={selectedSidebarTags}
+            matches={searchTags(taxonomy, sidebarTagInput)}
+            emptyMessage="No matching tags."
+            inputLabel="Tag search"
+            inputPlaceholder="Search tags across all categories"
+            onInputChange={(value) => setCategoryInput("sidebar", sidebarTagSearchKey, value)}
+            onToggleTag={toggleFilterTag}
+            renderMatchMeta={(match) =>
+              `${categoryLookup.get(match.tag.categoryId)?.name ?? "Unknown"} · ${match.matchedAlias ? `Alias: ${match.matchedAlias}` : match.matchType} · ${Math.round(match.score * 100)}%`
+            }
           />
-        </label>
-        <button type="button" onClick={onChooseRandomRecipe}>
-          Pick random recipe
-        </button>
-        {selectedRandomRecipe ? (
-          <div className="random-card">
-            <strong>{selectedRandomRecipe.title}</strong>
-            <span>{selectedRandomRecipe.summary}</span>
-          </div>
-        ) : null}
+        </div>
       </div>
     </aside>
   );

@@ -1,41 +1,26 @@
-import type { TaxonomyCategoryGroup } from "../../lib/taxonomyView";
+import { useTaxonomyAdminContext } from "../../context/taxonomy-admin-context";
+import { useTaxonomyBrowserUiContext } from "../../context/taxonomy-browser-ui-context";
+import { useTaxonomyContext } from "../../context/taxonomy-context";
+import CollapsibleTaxonomyCategory from "../taxonomy/CollapsibleTaxonomyCategory";
 
-export type CategoryForm = { name: string; description: string };
-export type TagForm = { categoryId: string; name: string };
-export type AliasForm = { tagId: string; alias: string };
-export type MergeForm = { sourceTagId: string; targetTagId: string };
+function TaxonomyWorkspace() {
+  const { taxonomyGroups } = useTaxonomyContext();
+  const { collapsedCategoryIds, toggleCategoryCollapsed } = useTaxonomyBrowserUiContext();
+  const {
+    categoryForm,
+    tagForm,
+    aliasForm,
+    mergeForm,
+    updateCategoryForm,
+    updateTagForm,
+    updateAliasForm,
+    updateMergeForm,
+    saveCategory,
+    saveTag,
+    saveAlias,
+    mergeSelectedTags,
+  } = useTaxonomyAdminContext();
 
-type TaxonomyWorkspaceProps = {
-  taxonomyGroups: TaxonomyCategoryGroup[];
-  categoryForm: CategoryForm;
-  tagForm: TagForm;
-  aliasForm: AliasForm;
-  mergeForm: MergeForm;
-  onCategoryFormChange: (patch: Partial<CategoryForm>) => void;
-  onTagFormChange: (patch: Partial<TagForm>) => void;
-  onAliasFormChange: (patch: Partial<AliasForm>) => void;
-  onMergeFormChange: (patch: Partial<MergeForm>) => void;
-  onSaveCategory: () => Promise<void>;
-  onSaveTag: () => Promise<void>;
-  onSaveAlias: () => Promise<void>;
-  onMergeSelectedTags: () => Promise<void>;
-};
-
-function TaxonomyWorkspace({
-  taxonomyGroups,
-  categoryForm,
-  tagForm,
-  aliasForm,
-  mergeForm,
-  onCategoryFormChange,
-  onTagFormChange,
-  onAliasFormChange,
-  onMergeFormChange,
-  onSaveCategory,
-  onSaveTag,
-  onSaveAlias,
-  onMergeSelectedTags,
-}: TaxonomyWorkspaceProps) {
   return (
     <div className="taxonomy-layout">
       <section className="panel">
@@ -46,18 +31,18 @@ function TaxonomyWorkspace({
           <span>Category name</span>
           <input
             value={categoryForm.name}
-            onChange={(event) => onCategoryFormChange({ name: event.currentTarget.value })}
+            onChange={(event) => updateCategoryForm({ name: event.currentTarget.value })}
           />
         </label>
         <label className="field">
           <span>Description</span>
           <textarea
             value={categoryForm.description}
-            onChange={(event) => onCategoryFormChange({ description: event.currentTarget.value })}
+            onChange={(event) => updateCategoryForm({ description: event.currentTarget.value })}
             rows={3}
           />
         </label>
-        <button type="button" onClick={() => void onSaveCategory()}>
+        <button type="button" onClick={() => void saveCategory()}>
           Save category
         </button>
       </section>
@@ -70,7 +55,7 @@ function TaxonomyWorkspace({
           <span>Category</span>
           <select
             value={tagForm.categoryId}
-            onChange={(event) => onTagFormChange({ categoryId: event.currentTarget.value })}
+            onChange={(event) => updateTagForm({ categoryId: event.currentTarget.value })}
           >
             <option value="">Choose a category</option>
             {taxonomyGroups.map(({ category }) => (
@@ -84,10 +69,10 @@ function TaxonomyWorkspace({
           <span>Tag name</span>
           <input
             value={tagForm.name}
-            onChange={(event) => onTagFormChange({ name: event.currentTarget.value })}
+            onChange={(event) => updateTagForm({ name: event.currentTarget.value })}
           />
         </label>
-        <button type="button" onClick={() => void onSaveTag()}>
+        <button type="button" onClick={() => void saveTag()}>
           Save tag
         </button>
       </section>
@@ -100,7 +85,7 @@ function TaxonomyWorkspace({
           <span>Canonical tag</span>
           <select
             value={aliasForm.tagId}
-            onChange={(event) => onAliasFormChange({ tagId: event.currentTarget.value })}
+            onChange={(event) => updateAliasForm({ tagId: event.currentTarget.value })}
           >
             <option value="">Choose a tag</option>
             {taxonomyGroups.flatMap(({ tags }) =>
@@ -116,10 +101,10 @@ function TaxonomyWorkspace({
           <span>Alias</span>
           <input
             value={aliasForm.alias}
-            onChange={(event) => onAliasFormChange({ alias: event.currentTarget.value })}
+            onChange={(event) => updateAliasForm({ alias: event.currentTarget.value })}
           />
         </label>
-        <button type="button" onClick={() => void onSaveAlias()}>
+        <button type="button" onClick={() => void saveAlias()}>
           Save alias
         </button>
       </section>
@@ -132,7 +117,7 @@ function TaxonomyWorkspace({
           <span>Source tag</span>
           <select
             value={mergeForm.sourceTagId}
-            onChange={(event) => onMergeFormChange({ sourceTagId: event.currentTarget.value })}
+            onChange={(event) => updateMergeForm({ sourceTagId: event.currentTarget.value })}
           >
             <option value="">Choose a source tag</option>
             {taxonomyGroups.flatMap(({ tags }) =>
@@ -148,7 +133,7 @@ function TaxonomyWorkspace({
           <span>Target tag</span>
           <select
             value={mergeForm.targetTagId}
-            onChange={(event) => onMergeFormChange({ targetTagId: event.currentTarget.value })}
+            onChange={(event) => updateMergeForm({ targetTagId: event.currentTarget.value })}
           >
             <option value="">Choose a target tag</option>
             {taxonomyGroups.flatMap(({ tags }) =>
@@ -160,7 +145,7 @@ function TaxonomyWorkspace({
             )}
           </select>
         </label>
-        <button type="button" onClick={() => void onMergeSelectedTags()}>
+        <button type="button" onClick={() => void mergeSelectedTags()}>
           Merge tags
         </button>
       </section>
@@ -170,20 +155,13 @@ function TaxonomyWorkspace({
           <h3>Current taxonomy</h3>
         </div>
         {taxonomyGroups.map(({ category, tags }) => (
-          <div key={category.id} className="taxonomy-category">
-            <h4>{category.name}</h4>
-            <p className="muted">{category.description}</p>
-            <div className="taxonomy-tag-list">
-              {tags.map((tag) => (
-                <div key={tag.id} className="taxonomy-tag">
-                  <strong>{tag.name} </strong>
-                  <span className="muted">
-                    {tag.aliases.length > 0 ? `Aliases: ${tag.aliases.join(", ")}` : "No aliases yet"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <CollapsibleTaxonomyCategory
+            key={category.id}
+            category={category}
+            tags={tags}
+            collapsed={collapsedCategoryIds[category.id] ?? true}
+            onToggle={() => toggleCategoryCollapsed(category.id)}
+          />
         ))}
       </section>
     </div>

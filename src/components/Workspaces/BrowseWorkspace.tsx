@@ -1,29 +1,17 @@
-import type { Recipe, Taxonomy } from "../../lib/models";
+import { useAppShellContext } from "../../context/app-shell-context";
+import { useRecipeCatalogContext } from "../../context/recipe-catalog-context";
+import { useRecipeEditorContext } from "../../context/recipe-editor-context";
+import { useSearchContext } from "../../context/search-context";
+import { useTaxonomyContext } from "../../context/taxonomy-context";
 import RecipeCard from "../RecipeCard";
 
-type BrowseWorkspaceProps = {
-  visibleRecipes: Recipe[];
-  groupedRecipes: Array<{ id: string; label: string; recipes: Recipe[] }>;
-  groupByCategoryId: string;
-  tagLookup: Map<string, Taxonomy["tags"][number]>;
-  categoryLookup: Map<string, Taxonomy["categories"][number]>;
-  onEdit: (recipe: Recipe) => void;
-  onDelete: (recipeId: string) => Promise<void>;
-  onOpenDetail: (recipeId: string) => void;
-  onRate: (recipeId: string, rating: number) => Promise<void>;
-};
+function BrowseWorkspace() {
+  const { openRecipeDetail } = useAppShellContext();
+  const { visibleRecipes, groupedRecipes, deleteRecipe, updateRecipeRating } = useRecipeCatalogContext();
+  const { openEditEditor } = useRecipeEditorContext();
+  const { groupByCategoryId } = useSearchContext();
+  const { tagLookup, categoryLookup } = useTaxonomyContext();
 
-function BrowseWorkspace({
-  visibleRecipes,
-  groupedRecipes,
-  groupByCategoryId,
-  tagLookup,
-  categoryLookup,
-  onEdit,
-  onDelete,
-  onOpenDetail,
-  onRate,
-}: BrowseWorkspaceProps) {
   if (groupByCategoryId) {
     return (
       <div className="section-stack">
@@ -40,10 +28,10 @@ function BrowseWorkspace({
                   recipe={recipe}
                   tagLookup={tagLookup}
                   categoryLookup={categoryLookup}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onOpenDetail={onOpenDetail}
-                  onRate={onRate}
+                  onEdit={openEditEditor}
+                  onDelete={deleteRecipe}
+                  onOpenDetail={openRecipeDetail}
+                  onRate={updateRecipeRating}
                 />
               ))}
             </div>
@@ -61,10 +49,10 @@ function BrowseWorkspace({
           recipe={recipe}
           tagLookup={tagLookup}
           categoryLookup={categoryLookup}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onOpenDetail={onOpenDetail}
-          onRate={onRate}
+          onEdit={openEditEditor}
+          onDelete={deleteRecipe}
+          onOpenDetail={openRecipeDetail}
+          onRate={updateRecipeRating}
         />
       ))}
     </div>

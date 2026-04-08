@@ -1,68 +1,40 @@
-import { useMemo } from "react";
-import { sourceTypes, type RecipeDraft, type SourceType, type TagSuggestion, type Taxonomy } from "../lib/models";
-import type { TaxonomyCategoryGroup } from "../lib/taxonomyView";
+import { useRecipeEditorContext } from "../context/recipe-editor-context";
+import { useTaxonomyFilterUiContext } from "../context/taxonomy-filter-ui-context";
+import { useTaxonomyContext } from "../context/taxonomy-context";
+import TaxonomyCategoryPicker from "./taxonomy/TaxonomyCategoryPicker";
+import { sourceTypes } from "../lib/models";
+import { searchTagsInCategory } from "../lib/taxonomy";
 
-type RecipeEditorModalProps = {
-  editorMode: "create" | "edit";
-  draft: RecipeDraft;
-  taxonomyGroups: TaxonomyCategoryGroup[];
-  categoryLookup: Map<string, Taxonomy["categories"][number]>;
-  draftImported: boolean;
-  showSourceControls: boolean;
-  uploadErrorActive: boolean;
-  isImporting: boolean;
-  draftTagInputs: Record<string, string>;
-  visibleDraftSuggestions: TagSuggestion[];
-  visibleEditableTagIds: string[];
-  mealTimeCategory?: Taxonomy["categories"][number];
-  showSourceSelector: boolean;
-  showImportControls: boolean;
-  showDraftForm: boolean;
-  onClose: () => void;
-  onDraftChange: (patch: Partial<RecipeDraft>) => void;
-  onClearUploadError: () => void;
-  onDraftTagInputChange: (categoryId: string, value: string) => void;
-  onRevealSourceControls: () => void;
-  onSelectSourceType: (sourceType: SourceType) => void;
-  onImportFromWebsite: () => Promise<void>;
-  onImportFromFile: (file: File | undefined) => Promise<void>;
-  onToggleDraftTag: (tagId: string) => void;
-  onCreateDraftTag: (categoryId: string) => Promise<void>;
-  onSaveDraft: () => Promise<void>;
-};
+function RecipeEditorModal() {
+  const {
+    editorOpen,
+    editorMode,
+    draft,
+    draftImported,
+    showSourceControls,
+    uploadErrorActive,
+    isImporting,
+    visibleDraftSuggestions,
+    showSourceSelector,
+    showImportControls,
+    showDraftForm,
+    closeEditor,
+    updateDraft,
+    clearUploadError,
+    revealSourceControls,
+    selectSourceType,
+    importFromWebsite,
+    importFromFile,
+    toggleDraftTag,
+    createDraftTag,
+    saveDraft,
+  } = useRecipeEditorContext();
+  const { editorCategoryInputs, setCategoryInput } = useTaxonomyFilterUiContext();
+  const { taxonomy, taxonomyGroups, categoryLookup, mealTimeCategory } = useTaxonomyContext();
 
-function RecipeEditorModal({
-  editorMode,
-  draft,
-  taxonomyGroups,
-  categoryLookup,
-  draftImported,
-  showSourceControls,
-  uploadErrorActive,
-  isImporting,
-  draftTagInputs,
-  visibleDraftSuggestions,
-  visibleEditableTagIds,
-  mealTimeCategory,
-  showSourceSelector,
-  showImportControls,
-  showDraftForm,
-  onClose,
-  onDraftChange,
-  onClearUploadError,
-  onDraftTagInputChange,
-  onRevealSourceControls,
-  onSelectSourceType,
-  onImportFromWebsite,
-  onImportFromFile,
-  onToggleDraftTag,
-  onCreateDraftTag,
-  onSaveDraft,
-}: RecipeEditorModalProps) {
-  const visibleEditableTagIdSet = useMemo(
-    () => new Set(visibleEditableTagIds),
-    [visibleEditableTagIds],
-  );
+  if (!editorOpen) {
+    return null;
+  }
 
   return (
     <div className="modal-backdrop">
@@ -71,11 +43,11 @@ function RecipeEditorModal({
           <h2>{editorMode === "edit" ? "Edit recipe" : "Review recipe draft"}</h2>
           <div className="button-row">
             {editorMode === "create" && draftImported && !showSourceControls ? (
-              <button type="button" className="secondary" onClick={onRevealSourceControls}>
+              <button type="button" className="secondary" onClick={revealSourceControls}>
                 Change source
               </button>
             ) : null}
-            <button type="button" className="secondary" onClick={onClose}>
+            <button type="button" className="secondary" onClick={closeEditor}>
               Close
             </button>
           </div>
@@ -97,7 +69,7 @@ function RecipeEditorModal({
                   key={sourceType}
                   type="button"
                   className={draft.sourceType === sourceType ? "chip chip-active" : "chip"}
-                  onClick={() => onSelectSourceType(sourceType)}
+                  onClick={() => selectSourceType(sourceType)}
                 >
                   {sourceType}
                 </button>
@@ -114,14 +86,14 @@ function RecipeEditorModal({
                     <input
                       value={draft.sourceRef}
                       onChange={(event) => {
-                        onClearUploadError();
-                        onDraftChange({ sourceRef: event.currentTarget.value });
+                        clearUploadError();
+                        updateDraft({ sourceRef: event.currentTarget.value });
                       }}
                       placeholder="https://example.com/recipe"
                     />
                     <button
                       type="button"
-                      onClick={() => void onImportFromWebsite()}
+                      onClick={() => void importFromWebsite()}
                       disabled={isImporting}
                     >
                       {isImporting ? "Importing..." : "Import"}
@@ -136,8 +108,8 @@ function RecipeEditorModal({
                       type="file"
                       accept={draft.sourceType === "photo" ? "image/*" : ".txt,.md,.rtf"}
                       onChange={(event) => {
-                        onClearUploadError();
-                        void onImportFromFile(event.currentTarget.files?.[0]);
+                        clearUploadError();
+                        void importFromFile(event.currentTarget.files?.[0]);
                       }}
                     />
                   </label>
@@ -153,21 +125,21 @@ function RecipeEditorModal({
               <span>Title</span>
               <input
                 value={draft.title}
-                onChange={(event) => onDraftChange({ title: event.currentTarget.value })}
+                onChange={(event) => updateDraft({ title: event.currentTarget.value })}
               />
             </label>
             <label className="field">
               <span>Source reference</span>
               <input
                 value={draft.sourceRef}
-                onChange={(event) => onDraftChange({ sourceRef: event.currentTarget.value })}
+                onChange={(event) => updateDraft({ sourceRef: event.currentTarget.value })}
               />
             </label>
             <label className="field field-wide">
               <span>Summary</span>
               <textarea
                 value={draft.summary}
-                onChange={(event) => onDraftChange({ summary: event.currentTarget.value })}
+                onChange={(event) => updateDraft({ summary: event.currentTarget.value })}
                 rows={3}
               />
             </label>
@@ -175,28 +147,28 @@ function RecipeEditorModal({
               <span>Servings</span>
               <input
                 value={draft.servings}
-                onChange={(event) => onDraftChange({ servings: event.currentTarget.value })}
+                onChange={(event) => updateDraft({ servings: event.currentTarget.value })}
               />
             </label>
             <label className="field">
               <span>Cuisine</span>
               <input
                 value={draft.cuisine}
-                onChange={(event) => onDraftChange({ cuisine: event.currentTarget.value })}
+                onChange={(event) => updateDraft({ cuisine: event.currentTarget.value })}
               />
             </label>
             <label className="field">
               <span>Meal type</span>
               <input
                 value={draft.mealType}
-                onChange={(event) => onDraftChange({ mealType: event.currentTarget.value })}
+                onChange={(event) => updateDraft({ mealType: event.currentTarget.value })}
               />
             </label>
             <label className="field field-wide">
               <span>Ingredients</span>
               <textarea
                 value={draft.ingredientsText}
-                onChange={(event) => onDraftChange({ ingredientsText: event.currentTarget.value })}
+                onChange={(event) => updateDraft({ ingredientsText: event.currentTarget.value })}
                 rows={8}
               />
             </label>
@@ -204,7 +176,7 @@ function RecipeEditorModal({
               <span>Instructions</span>
               <textarea
                 value={draft.instructionsText}
-                onChange={(event) => onDraftChange({ instructionsText: event.currentTarget.value })}
+                onChange={(event) => updateDraft({ instructionsText: event.currentTarget.value })}
                 rows={8}
               />
             </label>
@@ -228,7 +200,7 @@ function RecipeEditorModal({
                       : "suggestion"
                   }
                   disabled={!suggestion.tagId}
-                  onClick={() => suggestion.tagId && onToggleDraftTag(suggestion.tagId)}
+                  onClick={() => suggestion.tagId && toggleDraftTag(suggestion.tagId)}
                 >
                   <strong>{suggestion.matchedName ?? suggestion.input}</strong>
                   <span>
@@ -248,44 +220,32 @@ function RecipeEditorModal({
               <span>{draft.selectedTagIds.length} selected</span>
             </div>
             {taxonomyGroups.map(({ category, tags }) => (
-              <div key={category.id} className="filter-group">
-                <h4>{category.name}</h4>
-                <div className="chip-wrap">
-                  {tags
-                    .filter((tag) => visibleEditableTagIdSet.has(tag.id))
-                    .map((tag) => (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        className={draft.selectedTagIds.includes(tag.id) ? "chip chip-active" : "chip"}
-                        onClick={() => onToggleDraftTag(tag.id)}
-                      >
-                        {tag.name}
-                      </button>
-                    ))}
-                </div>
-                <div className="draft-tag-row">
-                  <input
-                    value={draftTagInputs[category.id] ?? ""}
-                    onChange={(event) => onDraftTagInputChange(category.id, event.currentTarget.value)}
-                    placeholder={`Add a ${category.name} tag`}
-                  />
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => void onCreateDraftTag(category.id)}
-                  >
-                    Add tag
-                  </button>
-                </div>
-              </div>
+              <TaxonomyCategoryPicker
+                key={category.id}
+                categoryName={category.name}
+                inputValue={editorCategoryInputs[category.id] ?? ""}
+                selectedTags={tags.filter((tag) => draft.selectedTagIds.includes(tag.id))}
+                matches={searchTagsInCategory(
+                  taxonomy,
+                  category.id,
+                  editorCategoryInputs[category.id] ?? "",
+                )}
+                emptyMessage={`No matching ${category.name.toLowerCase()} tags.`}
+                inputLabel={`${category.name} tag search`}
+                inputPlaceholder={`Search or add a ${category.name} tag`}
+                onInputChange={(value) => setCategoryInput("editor", category.id, value)}
+                onToggleTag={toggleDraftTag}
+                onCreateTag={() =>
+                  void createDraftTag(category.id, editorCategoryInputs[category.id] ?? "")
+                }
+              />
             ))}
           </section>
         ) : null}
 
         {showDraftForm ? (
           <div className="button-row">
-            <button type="button" onClick={() => void onSaveDraft()}>
+            <button type="button" onClick={() => void saveDraft()}>
               {editorMode === "edit" ? "Save recipe" : "Create recipe"}
             </button>
             {mealTimeCategory ? (

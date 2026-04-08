@@ -72,7 +72,7 @@ describe("recipe browse and detail UI", () => {
         findTagId(taxonomy, "Meal-Time", "Dinner"),
         findTagId(taxonomy, "Cuisine", "Italian"),
         findTagId(taxonomy, "Course", "Main"),
-        findTagId(taxonomy, "Difficulty", "Easy"),
+        findTagId(taxonomy, "Cooking-Method", "Baked"),
         findTagId(taxonomy, "Time", "Quick"),
         findTagId(taxonomy, "Equipment", "Oven"),
         findTagId(taxonomy, "Occasion", "Weeknight"),
@@ -253,13 +253,13 @@ describe("recipe browse and detail UI", () => {
     await user.click(screen.getByRole("button", { name: "Upload Recipe" }));
     await user.click(screen.getByRole("button", { name: "manual" }));
 
-    const cuisineInput = screen.getByPlaceholderText("Add a Cuisine tag");
-    const cuisineRow = cuisineInput.parentElement;
-    if (!cuisineRow) {
-      throw new Error("Cuisine tag row not found");
+    const cuisineInput = screen.getByPlaceholderText("Search or add a Cuisine tag");
+    const cuisinePicker = cuisineInput.closest("section");
+    if (!cuisinePicker) {
+      throw new Error("Cuisine tag picker not found");
     }
     await user.type(cuisineInput, "Fusion");
-    await user.click(within(cuisineRow).getByRole("button", { name: "Add tag" }));
+    await user.click(within(cuisinePicker).getByRole("button", { name: "Add tag" }));
 
     await waitFor(() =>
       expect(screen.getByTestId("status-bar").textContent).toContain('Tag "Fusion" added to the recipe form.'),
@@ -293,11 +293,58 @@ describe("recipe browse and detail UI", () => {
     const editScope = within(editAssignedTags!);
     const suggestionScope = within(suggestedTags!);
 
-    expect(editScope.getByRole("button", { name: "Italian" })).toBeTruthy();
-    expect(editScope.getByRole("button", { name: "Dinner" })).toBeTruthy();
-    expect(editScope.getByRole("button", { name: "Pasta" })).toBeTruthy();
-    expect(editScope.queryByRole("button", { name: "Japanese" })).toBeNull();
-    expect(editScope.queryByRole("button", { name: "Breakfast" })).toBeNull();
+    expect(suggestionScope.getByText("Italian")).toBeTruthy();
+    expect(suggestionScope.getByText("Dinner")).toBeTruthy();
+    expect(suggestionScope.getByText("Pasta")).toBeTruthy();
+
+    const cuisineSearch = editScope.getByLabelText("Cuisine tag search");
+    await user.type(cuisineSearch, "ian");
+
+    expect(editScope.getByRole("button", { name: /^Italian/ })).toBeTruthy();
+    expect(editScope.getByRole("button", { name: /^Indian/ })).toBeTruthy();
+    expect(editScope.queryByRole("button", { name: /^Japanese/ })).toBeNull();
     expect(suggestionScope.queryByRole("button", { name: /dragonfruit/i })).toBeNull();
+  });
+
+  it("shows unified sidebar taxonomy matches with category previews after typing", async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+    );
+
+    expect(screen.queryByRole("button", { name: "Italian" })).toBeNull();
+
+    await user.type(screen.getByLabelText("Tag search"), "ian");
+
+    const italianSuggestion = screen.getByRole("button", { name: /^Italian/ });
+    expect(italianSuggestion).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Indian/ })).toBeTruthy();
+    expect(within(italianSuggestion).getByText(/^Cuisine · substring · 92%$/)).toBeTruthy();
+  });
+
+  it("starts taxonomy browser categories collapsed and expands them on demand", async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Manage taxonomy" }));
+
+    const taxonomyBrowser = screen.getByText("Current taxonomy").closest("section");
+    if (!taxonomyBrowser) {
+      throw new Error("Current taxonomy section not found");
+    }
+
+    expect(within(taxonomyBrowser).queryByText("Italian")).toBeNull();
+
+    await user.click(within(taxonomyBrowser).getByRole("button", { name: /Cuisine/ }));
+
+    expect(within(taxonomyBrowser).getByText("Italian")).toBeTruthy();
   });
 });

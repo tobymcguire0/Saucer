@@ -101,8 +101,189 @@ function similarity(a: string, b: string) {
   return Math.max(ratio, overlap);
 }
 
+export interface TaxonomyTagMatch {
+  tag: Tag;
+  score: number;
+  matchedTerm: string;
+  matchedAlias?: string;
+  matchType: "exact" | "prefix" | "substring" | "alias" | "fuzzy";
+}
+
 export function getCategoryByName(taxonomy: Taxonomy, name: string) {
   return taxonomy.categories.find((category) => category.name === name);
+}
+
+export function searchTags(
+  taxonomy: Taxonomy,
+  input: string,
+  limit = 8,
+): TaxonomyTagMatch[] {
+  const normalizedInput = normalizeTerm(input);
+  if (!normalizedInput) {
+    return [];
+  }
+  const matches: TaxonomyTagMatch[] = [];
+
+  for (const tag of taxonomy.tags) {
+    const normalizedName = normalizeTerm(tag.name);
+    const candidates = [tag.name, ...tag.aliases];
+    let bestMatch: TaxonomyTagMatch | undefined;
+
+    for (const candidate of candidates) {
+      const normalizedCandidate = normalizeTerm(candidate);
+      if (!normalizedCandidate) {
+        continue;
+      }
+
+      let score = 0;
+      let matchType: TaxonomyTagMatch["matchType"] | undefined;
+
+      if (normalizedCandidate === normalizedInput) {
+        score = candidate === tag.name ? 1 : 0.99;
+        matchType = "exact";
+      } else if (normalizedCandidate.startsWith(normalizedInput)) {
+        score = candidate === tag.name ? 0.97 : 0.95;
+        matchType = "prefix";
+      } else if (normalizedCandidate.includes(normalizedInput)) {
+        score = candidate === tag.name ? 0.92 : 0.9;
+        matchType = candidate === tag.name ? "substring" : "alias";
+      } else {
+        const fuzzyScore = similarity(normalizedInput, normalizedCandidate);
+        if (fuzzyScore >= 0.72) {
+          score = fuzzyScore;
+          matchType = "fuzzy";
+        }
+      }
+
+      if (!matchType || score <= 0) {
+        continue;
+      }
+
+      const nextMatch: TaxonomyTagMatch = {
+        tag,
+        score,
+        matchedTerm: candidate,
+        matchedAlias: candidate === tag.name ? undefined : candidate,
+        matchType,
+      };
+
+      if (!bestMatch || nextMatch.score > bestMatch.score) {
+        bestMatch = nextMatch;
+      }
+    }
+
+    if (bestMatch) {
+      if (
+        bestMatch.matchType === "fuzzy" &&
+        !normalizedName.includes(normalizedInput) &&
+        !tag.aliases.some((alias) => normalizeTerm(alias).includes(normalizedInput))
+      ) {
+        bestMatch.score = Math.min(bestMatch.score, 0.82);
+      }
+
+      matches.push(bestMatch);
+    }
+  }
+
+  return matches
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return left.tag.name.localeCompare(right.tag.name);
+    })
+    .slice(0, limit);
+
+}
+
+export function searchTagsInCategory(
+  taxonomy: Taxonomy,
+  categoryId: string,
+  input: string,
+  limit = 8,
+): TaxonomyTagMatch[] {
+  const normalizedInput = normalizeTerm(input);
+  if (!normalizedInput) {
+    return [];
+  }
+
+  const matches: TaxonomyTagMatch[] = [];
+
+  for (const tag of taxonomy.tags) {
+    if (tag.categoryId !== categoryId) {
+      continue;
+    }
+
+    const normalizedName = normalizeTerm(tag.name);
+    const candidates = [tag.name, ...tag.aliases];
+    let bestMatch: TaxonomyTagMatch | undefined;
+
+    for (const candidate of candidates) {
+      const normalizedCandidate = normalizeTerm(candidate);
+      if (!normalizedCandidate) {
+        continue;
+      }
+
+      let score = 0;
+      let matchType: TaxonomyTagMatch["matchType"] | undefined;
+
+      if (normalizedCandidate === normalizedInput) {
+        score = candidate === tag.name ? 1 : 0.99;
+        matchType = "exact";
+      } else if (normalizedCandidate.startsWith(normalizedInput)) {
+        score = candidate === tag.name ? 0.97 : 0.95;
+        matchType = "prefix";
+      } else if (normalizedCandidate.includes(normalizedInput)) {
+        score = candidate === tag.name ? 0.92 : 0.9;
+        matchType = candidate === tag.name ? "substring" : "alias";
+      } else {
+        const fuzzyScore = similarity(normalizedInput, normalizedCandidate);
+        if (fuzzyScore >= 0.72) {
+          score = fuzzyScore;
+          matchType = "fuzzy";
+        }
+      }
+
+      if (!matchType || score <= 0) {
+        continue;
+      }
+
+      const nextMatch: TaxonomyTagMatch = {
+        tag,
+        score,
+        matchedTerm: candidate,
+        matchedAlias: candidate === tag.name ? undefined : candidate,
+        matchType,
+      };
+
+      if (!bestMatch || nextMatch.score > bestMatch.score) {
+        bestMatch = nextMatch;
+      }
+    }
+
+    if (bestMatch) {
+      if (
+        bestMatch.matchType === "fuzzy" &&
+        !normalizedName.includes(normalizedInput) &&
+        !tag.aliases.some((alias) => normalizeTerm(alias).includes(normalizedInput))
+      ) {
+        bestMatch.score = Math.min(bestMatch.score, 0.82);
+      }
+
+      matches.push(bestMatch);
+    }
+  }
+
+  return matches
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return left.tag.name.localeCompare(right.tag.name);
+    })
+    .slice(0, limit);
 }
 
 function resolveAgainstTags(term: string, tags: Tag[]) {

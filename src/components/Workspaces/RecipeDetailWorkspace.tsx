@@ -1,27 +1,16 @@
 import { useEffect, useState } from "react";
-import type { Recipe, Taxonomy } from "../../lib/models";
+import { useAppShellContext } from "../../context/app-shell-context";
+import { useRecipeCatalogContext } from "../../context/recipe-catalog-context";
+import { useRecipeEditorContext } from "../../context/recipe-editor-context";
+import { useTaxonomyContext } from "../../context/taxonomy-context";
 import { sortTagIdsForPreview } from "../recipeTagPreview";
 import StarRating from "../StarRating";
 
-type RecipeDetailWorkspaceProps = {
-  recipe?: Recipe;
-  tagLookup: Map<string, Taxonomy["tags"][number]>;
-  categoryLookup: Map<string, Taxonomy["categories"][number]>;
-  onBack: () => void;
-  onEdit: (recipe: Recipe) => void;
-  onDelete: (recipeId: string) => Promise<void>;
-  onRate: (recipeId: string, rating: number) => Promise<void>;
-};
-
-function RecipeDetailWorkspace({
-  recipe,
-  tagLookup,
-  categoryLookup,
-  onBack,
-  onEdit,
-  onDelete,
-  onRate,
-}: RecipeDetailWorkspaceProps) {
+function RecipeDetailWorkspace() {
+  const { closeRecipeDetail } = useAppShellContext();
+  const { selectedRecipe: recipe, deleteRecipe, updateRecipeRating } = useRecipeCatalogContext();
+  const { openEditEditor } = useRecipeEditorContext();
+  const { tagLookup, categoryLookup } = useTaxonomyContext();
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const sortedTagIds = recipe
     ? sortTagIdsForPreview(recipe.tagIds, tagLookup, categoryLookup)
@@ -39,7 +28,7 @@ function RecipeDetailWorkspace({
             <p className="eyebrow">Recipe detail</p>
             <h2>No recipe selected</h2>
           </div>
-          <button type="button" className="secondary" onClick={onBack}>
+          <button type="button" className="secondary" onClick={closeRecipeDetail}>
             Back to browse
           </button>
         </div>
@@ -64,7 +53,7 @@ function RecipeDetailWorkspace({
             className="secondary"
             onClick={() => {
               setDeleteConfirming(false);
-              onBack();
+              closeRecipeDetail();
             }}
           >
             Back to browse
@@ -73,7 +62,7 @@ function RecipeDetailWorkspace({
             type="button"
             onClick={() => {
               setDeleteConfirming(false);
-              onEdit(recipe);
+              openEditEditor(recipe);
             }}
           >
             Edit recipe
@@ -83,7 +72,7 @@ function RecipeDetailWorkspace({
             className={deleteConfirming ? "" : "secondary"}
             onClick={() => {
               if (deleteConfirming) {
-                void onDelete(recipe.id);
+                void deleteRecipe(recipe.id);
                 return;
               }
               setDeleteConfirming(true);
@@ -109,7 +98,7 @@ function RecipeDetailWorkspace({
               label={`Rate ${recipe.title}`}
               onRate={(value) => {
                 setDeleteConfirming(false);
-                void onRate(recipe.id, value);
+                void updateRecipeRating(recipe.id, value);
               }}
             />
           </div>

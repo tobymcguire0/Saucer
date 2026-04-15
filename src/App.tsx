@@ -14,7 +14,7 @@ function AppContent() {
       <AppWorkspace />
       <RecipeEditorModal />
       <StatusBar />
-      {loading ? <div className="loading-overlay">Loading local cookbook...</div> : null}
+      {loading ? <div className="loading-overlay">Loading local Saucer...</div> : null}
     </main>
   );
 }

@@ -1,6 +1,6 @@
-# Cookbook
+# Saucer
 
-Cookbook is a local-first recipe app and a software experimentation project focused on how recipe data can be stored, searched, and moved between backends over time. Today it uses Obsidian-friendly markdown files and a local SQLite-style search index; future iterations are intended to explore SQL storage, cloud-backed storage, authentication, and cross-device recipe sync.
+Saucer is a local-first recipe app and a software experimentation project focused on how recipe data can be stored, searched, and moved between backends over time. Today it uses Obsidian-friendly markdown files and a local SQLite-style search index; future iterations are intended to explore SQL storage, cloud-backed storage, authentication, and cross-device recipe sync.
 
 ## Why this project exists
 

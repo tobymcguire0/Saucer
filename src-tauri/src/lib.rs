@@ -29,7 +29,7 @@ fn vault_root(app: &AppHandle) -> Result<PathBuf, String> {
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?
-        .join("cookbook");
+        .join("saucer");
     fs::create_dir_all(root.join("recipes")).map_err(|error| error.to_string())?;
     Ok(root)
 }
@@ -148,7 +148,7 @@ fn replace_vault_snapshot(app: AppHandle, snapshot: VaultSnapshot) -> Result<Vau
 #[tauri::command]
 async fn fetch_recipe_page(url: String) -> Result<RecipePagePayload, String> {
     let client = reqwest::Client::builder()
-        .user_agent("Cookbook/0.1")
+        .user_agent("Saucer/0.1")
         .redirect(reqwest::redirect::Policy::limited(10))
         .build()
         .map_err(|error| error.to_string())?;

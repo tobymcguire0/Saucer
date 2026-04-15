@@ -32,7 +32,7 @@ function AppSidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-section">
-        <p className="eyebrow">Cookbook</p>
+        <p className="eyebrow">Saucer</p>
         <h1>Recipe aggregator</h1>
         <p className="muted">Upload, Save, and Search Recipes.</p>
         <div className="button-row">

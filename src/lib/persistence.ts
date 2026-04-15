@@ -15,7 +15,7 @@ interface VaultSnapshot {
   taxonomy?: Taxonomy;
 }
 
-const vaultKey = "cookbook:obsidian:vault";
+const vaultKey = "saucer:obsidian:vault";
 
 export interface RecipeStore {
   load(): Promise<AppSnapshot>;

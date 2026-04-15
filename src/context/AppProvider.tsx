@@ -93,7 +93,7 @@ function AppProvider({ children }: AppProviderProps) {
   const [editorCategoryInputs, setEditorCategoryInputs] = useState<Record<string, string>>({});
   const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<Record<string, boolean>>({});
   const { statusMessage, statusTone, statusExpanded, updateStatus } = useStatusMessage(
-    "Loading cookbook...",
+    "Loading Saucer...",
   );
 
   const draftSuggestions = useMemo(
@@ -178,7 +178,7 @@ function AppProvider({ children }: AppProviderProps) {
         const snapshot = await recipeStore.load();
         setRecipes(snapshot.recipes);
         setTaxonomy(snapshot.taxonomy);
-        updateStatus("Cookbook loaded from local Obsidian-style storage.", "success");
+        updateStatus("Saucer loaded from local Obsidian-style storage.", "success");
         await searchIndex.rebuild(snapshot.recipes, snapshot.taxonomy);
       } catch (error) {
         updateStatus(

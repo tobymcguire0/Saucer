@@ -1,5 +1,7 @@
-import { createRequiredContext } from "./createRequiredContext";
-import type { AliasForm, CategoryForm, MergeForm, TagForm } from "./taxonomy-admin-types";
+import { useShallow } from "zustand/react/shallow";
+
+import { useTaxonomyUiStore } from "../features/taxonomy/useTaxonomyUiStore";
+import type { AliasForm, CategoryForm, MergeForm, TagForm } from "../features/taxonomy/types";
 
 export type TaxonomyAdminContextValue = {
   categoryForm: CategoryForm;
@@ -16,5 +18,21 @@ export type TaxonomyAdminContextValue = {
   mergeSelectedTags: () => Promise<void>;
 };
 
-export const [TaxonomyAdminContext, useTaxonomyAdminContext] =
-  createRequiredContext<TaxonomyAdminContextValue>("TaxonomyAdminContext");
+export function useTaxonomyAdminContext(): TaxonomyAdminContextValue {
+  return useTaxonomyUiStore(
+    useShallow((state) => ({
+      categoryForm: state.categoryForm,
+      tagForm: state.tagForm,
+      aliasForm: state.aliasForm,
+      mergeForm: state.mergeForm,
+      updateCategoryForm: state.updateCategoryForm,
+      updateTagForm: state.updateTagForm,
+      updateAliasForm: state.updateAliasForm,
+      updateMergeForm: state.updateMergeForm,
+      saveCategory: state.saveCategory,
+      saveTag: state.saveTag,
+      saveAlias: state.saveAlias,
+      mergeSelectedTags: state.mergeSelectedTags,
+    })),
+  );
+}

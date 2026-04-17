@@ -4,7 +4,7 @@ import AppSidebar from "./components/AppSidebar";
 import RecipeEditorModal from "./components/RecipeEditorModal";
 import StatusBar from "./components/StatusBar";
 import { useAppShellContext } from "./context/app-shell-context";
-import AppProvider from "./context/AppProvider";
+import { useAppBootstrap } from "./features/app/useAppBootstrap";
 import { useAuth } from "react-oidc-context";
 
 /** Clear local OIDC state and redirect to Cognito's hosted logout endpoint. */
@@ -25,6 +25,7 @@ export function signOutRedirect() {
 }
 
 function AppContent() {
+  useAppBootstrap();
   const { loading } = useAppShellContext();
 
   return (
@@ -70,11 +71,7 @@ function App() {
   }
 
   if (auth.isAuthenticated) {
-    return (
-      <AppProvider>
-        <AppContent />
-      </AppProvider>
-    );
+    return <AppContent />;
   }
 
   return <div>Redirecting to sign in…</div>;

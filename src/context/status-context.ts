@@ -1,5 +1,8 @@
-import type { StatusTone } from "../hooks/useStatusMessage";
-import { createRequiredContext } from "./createRequiredContext";
+import { useShallow } from "zustand/react/shallow";
+
+import { useStatusStore, type StatusTone } from "../features/status/useStatusStore";
+
+export type { StatusTone };
 
 export type StatusContextValue = {
   statusMessage: string;
@@ -8,5 +11,13 @@ export type StatusContextValue = {
   updateStatus: (message: string, tone?: StatusTone) => void;
 };
 
-export const [StatusContext, useStatusContext] =
-  createRequiredContext<StatusContextValue>("StatusContext");
+export function useStatusContext(): StatusContextValue {
+  return useStatusStore(
+    useShallow((state) => ({
+      statusMessage: state.statusMessage,
+      statusTone: state.statusTone,
+      statusExpanded: state.statusExpanded,
+      updateStatus: state.updateStatus,
+    })),
+  );
+}

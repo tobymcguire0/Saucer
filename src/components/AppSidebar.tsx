@@ -3,10 +3,10 @@ import { useRecipeEditorContext } from "../context/recipe-editor-context";
 import { useSearchContext } from "../context/search-context";
 import { useTaxonomyFilterUiContext } from "../context/taxonomy-filter-ui-context";
 import { useTaxonomyContext } from "../context/taxonomy-context";
-import TaxonomyCategoryPicker from "./taxonomy/TaxonomyCategoryPicker";
-import { recipeSortOptions } from "../lib/models";
-import { searchTags } from "../lib/taxonomy";
-import { isRecipeSort } from "../lib/typeGuards";
+import RandomDishPanel from "../features/browse/components/RandomDishPanel";
+import SearchFilterPanel from "../features/browse/components/SearchFilterPanel";
+import SidebarHeader from "../features/browse/components/SidebarHeader";
+import SidebarNavigation from "../features/browse/components/SidebarNavigation";
 import { signOutRedirect } from "../App";
 import { useAuth } from "react-oidc-context";
 
@@ -34,127 +34,32 @@ function AppSidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-section">
-        <h1>{auth.user?.profile.preferred_username ? `${auth.user.profile.preferred_username}'s Saucer` : "Saucer"}</h1>
-        <p className="eyebrow">Recipe Aggregator</p>
-        <p className="muted">Upload, Save, and Search Recipes.</p>
-        <div className="button-row">
-          <button type="button" onClick={() => signOutRedirect()}>
-            Logout
-          </button>
-          <button type="button" onClick={() => openCreateEditor("website")}>
-            Upload Recipe
-          </button>
-        </div>
-        <div className="button-row">
-          <button
-            type="button"
-            className={
-              activeView === "recipes" || activeView === "recipeDetail"
-                ? "secondary nav-active"
-                : "secondary"
-            }
-            onClick={() => setActiveWorkspace("recipes")}
-          >
-            Browse recipes
-          </button>
-          <button
-            type="button"
-            className={activeView === "taxonomy" ? "secondary nav-active" : "secondary"}
-            onClick={() => setActiveWorkspace("taxonomy")}
-          >
-            Manage taxonomy
-          </button>
-        </div>
-      </div>
-
-      <div className="sidebar-section">
-        <div className="section-heading">
-          <h2>Random dish</h2>
-        </div>
-        <p className="muted">Uses your active tag filters plus optional ingredient keywords.</p>
-        <label className="field">
-          <span>Required ingredients</span>
-          <input
-            value={randomIngredientInput}
-            onChange={(event) => updateRandomIngredientSearch(event.currentTarget.value)}
-            placeholder="egg, rice, tomato"
-          />
-        </label>
-        <button type="button" onClick={chooseRandomRecipe}>
-          Pick random recipe
-        </button>
-      </div>
-
-      <div className="sidebar-section">
-        <div className="section-heading">
-          <h2>Search and filter</h2>
-        </div>
-        <label className="field">
-          <span>Search</span>
-          <input
-            value={query.searchText}
-            onChange={(event) => updateSearchText(event.currentTarget.value)}
-            placeholder="Search title, ingredients, or instructions"
-          />
-        </label>
-
-        <div className="two-column">
-          <label className="field">
-            <span>Sort by</span>
-            <select
-              value={query.sortBy}
-              onChange={(event) => {
-                const { value } = event.currentTarget;
-                if (isRecipeSort(value)) {
-                  updateSortBy(value);
-                }
-              }}
-            >
-              {recipeSortOptions.map((sortOption) => (
-                <option key={sortOption} value={sortOption}>
-                  {sortOption === "updated"
-                    ? "Recently updated"
-                    : sortOption === "mealType"
-                      ? "Meal type"
-                      : sortOption.charAt(0).toUpperCase() + sortOption.slice(1)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Group by</span>
-            <select
-              value={groupByCategoryId}
-              onChange={(event) => updateGroupByCategory(event.currentTarget.value)}
-            >
-              <option value="">No grouping</option>
-              {taxonomyGroups.map(({ category }) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="filter-groups">
-          <TaxonomyCategoryPicker
-            categoryName="Tags"
-            inputValue={sidebarTagInput}
-            selectedTags={selectedSidebarTags}
-            matches={searchTags(taxonomy, sidebarTagInput)}
-            emptyMessage="No matching tags."
-            inputLabel="Tag search"
-            inputPlaceholder="Search tags across all categories"
-            onInputChange={(value) => setCategoryInput("sidebar", sidebarTagSearchKey, value)}
-            onToggleTag={toggleFilterTag}
-            renderMatchMeta={(match) =>
-              `${categoryLookup.get(match.tag.categoryId)?.name ?? "Unknown"} · ${match.matchedAlias ? `Alias: ${match.matchedAlias}` : match.matchType} · ${Math.round(match.score * 100)}%`
-            }
-          />
-        </div>
-      </div>
+      <SidebarHeader
+        username={auth.user?.profile.preferred_username}
+        onLogout={signOutRedirect}
+        onUploadRecipe={() => openCreateEditor("website")}
+      />
+      <SidebarNavigation activeView={activeView} setActiveWorkspace={setActiveWorkspace} />
+      <RandomDishPanel
+        randomIngredientInput={randomIngredientInput}
+        updateRandomIngredientSearch={updateRandomIngredientSearch}
+        chooseRandomRecipe={chooseRandomRecipe}
+      />
+      <SearchFilterPanel
+        query={query}
+        groupByCategoryId={groupByCategoryId}
+        taxonomy={taxonomy}
+        taxonomyGroups={taxonomyGroups}
+        categoryLookup={categoryLookup}
+        sidebarTagInput={sidebarTagInput}
+        selectedSidebarTags={selectedSidebarTags}
+        updateSearchText={updateSearchText}
+        updateSortBy={updateSortBy}
+        updateGroupByCategory={updateGroupByCategory}
+        setCategoryInput={setCategoryInput}
+        toggleFilterTag={toggleFilterTag}
+        sidebarTagSearchKey={sidebarTagSearchKey}
+      />
     </aside>
   );
 }

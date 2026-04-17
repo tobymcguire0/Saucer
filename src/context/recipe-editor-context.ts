@@ -1,7 +1,17 @@
-import type { Recipe, RecipeDraft, SourceType, TagSuggestion } from "../lib/models";
-import { createRequiredContext } from "./createRequiredContext";
+import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 
-export type RecipeEditorMode = "create" | "edit";
+import { useSaucerStore } from "../features/saucer/useSaucerStore";
+import { useRecipeEditorStore } from "../features/editor/useRecipeEditorStore";
+import type { RecipeEditorMode } from "../features/editor/types";
+import type { Recipe, RecipeDraft, SourceType, TagSuggestion } from "../lib/models";
+import {
+  buildTagSuggestions,
+  filterDraftSuggestionsByConfidence,
+  getVisibleDraftTagIds,
+} from "../lib/taxonomy";
+
+export type { RecipeEditorMode };
 
 export type RecipeEditorContextValue = {
   editorOpen: boolean;
@@ -30,5 +40,60 @@ export type RecipeEditorContextValue = {
   saveDraft: () => Promise<void>;
 };
 
-export const [RecipeEditorContext, useRecipeEditorContext] =
-  createRequiredContext<RecipeEditorContextValue>("RecipeEditorContext");
+export function useRecipeEditorContext(): RecipeEditorContextValue {
+  const taxonomy = useSaucerStore((state) => state.taxonomy);
+  const state = useRecipeEditorStore(
+    useShallow((store) => ({
+      editorOpen: store.editorOpen,
+      editorMode: store.editorMode,
+      draft: store.draft,
+      draftImported: store.draftImported,
+      showSourceControls: store.showSourceControls,
+      uploadErrorActive: store.uploadErrorActive,
+      isImporting: store.isImporting,
+      closeEditor: store.closeEditor,
+      openCreateEditor: store.openCreateEditor,
+      openEditEditor: store.openEditEditor,
+      updateDraft: store.updateDraft,
+      clearUploadError: store.clearUploadError,
+      revealSourceControls: store.revealSourceControls,
+      selectSourceType: store.selectSourceType,
+      importFromWebsite: store.importFromWebsite,
+      importFromFile: store.importFromFile,
+      toggleDraftTag: store.toggleDraftTag,
+      createDraftTag: store.createDraftTag,
+      saveDraft: store.saveDraft,
+    })),
+  );
+
+  return useMemo(() => {
+    const draftSuggestions = buildTagSuggestions(
+      {
+        title: state.draft.title,
+        summary: state.draft.summary,
+        mealType: state.draft.mealType,
+        cuisine: state.draft.cuisine,
+        ingredientsText: state.draft.ingredientsText,
+        instructionsText: state.draft.instructionsText,
+      },
+      taxonomy,
+    );
+    const visibleDraftSuggestions = filterDraftSuggestionsByConfidence(draftSuggestions);
+    const visibleEditableTagIds = getVisibleDraftTagIds(state.draft.selectedTagIds, draftSuggestions);
+    const showSourceSelector =
+      state.editorMode === "create" && (state.draft.sourceType === "manual" || state.showSourceControls);
+    const showImportControls =
+      state.editorMode === "create" && state.draft.sourceType !== "manual" && state.showSourceControls;
+    const showDraftForm =
+      state.editorMode === "edit" || state.draft.sourceType === "manual" || state.draftImported;
+
+    return {
+      ...state,
+      visibleDraftSuggestions,
+      visibleEditableTagIds,
+      showSourceSelector,
+      showImportControls,
+      showDraftForm,
+    };
+  }, [state, taxonomy]);
+}

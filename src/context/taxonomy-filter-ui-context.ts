@@ -1,6 +1,9 @@
-import { createRequiredContext } from "./createRequiredContext";
+import { useShallow } from "zustand/react/shallow";
 
-export type TaxonomyFilterScope = "sidebar" | "editor";
+import { useTaxonomyUiStore } from "../features/taxonomy/useTaxonomyUiStore";
+import type { TaxonomyFilterScope } from "../features/taxonomy/types";
+
+export type { TaxonomyFilterScope };
 
 export type TaxonomyFilterUiContextValue = {
   sidebarCategoryInputs: Record<string, string>;
@@ -9,5 +12,13 @@ export type TaxonomyFilterUiContextValue = {
   resetCategoryInputs: (scope: TaxonomyFilterScope) => void;
 };
 
-export const [TaxonomyFilterUiContext, useTaxonomyFilterUiContext] =
-  createRequiredContext<TaxonomyFilterUiContextValue>("TaxonomyFilterUiContext");
+export function useTaxonomyFilterUiContext(): TaxonomyFilterUiContextValue {
+  return useTaxonomyUiStore(
+    useShallow((state) => ({
+      sidebarCategoryInputs: state.sidebarCategoryInputs,
+      editorCategoryInputs: state.editorCategoryInputs,
+      setCategoryInput: state.setCategoryInput,
+      resetCategoryInputs: state.resetCategoryInputs,
+    })),
+  );
+}

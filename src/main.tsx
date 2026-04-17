@@ -15,7 +15,10 @@ const cognitoAuthConfig = {
   client_id: import.meta.env.VITE_COGNITO_CLIENT_ID,
   redirect_uri: window.location.origin,
   response_type: "code",
-  scope: "phone openid email",
+  scope: "email openid phone",
+  onSigninCallback: () => {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  },
 };
   
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

@@ -178,7 +178,6 @@ function AppProvider({ children }: AppProviderProps) {
         const snapshot = await recipeStore.load();
         setRecipes(snapshot.recipes);
         setTaxonomy(snapshot.taxonomy);
-        updateStatus("Saucer loaded from local Obsidian-style storage.", "success");
         await searchIndex.rebuild(snapshot.recipes, snapshot.taxonomy);
       } catch (error) {
         updateStatus(

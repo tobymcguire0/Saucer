@@ -7,6 +7,8 @@ import TaxonomyCategoryPicker from "./taxonomy/TaxonomyCategoryPicker";
 import { recipeSortOptions } from "../lib/models";
 import { searchTags } from "../lib/taxonomy";
 import { isRecipeSort } from "../lib/typeGuards";
+import { signOutRedirect } from "../App";
+import { useAuth } from "react-oidc-context";
 
 const sidebarTagSearchKey = "__all__";
 
@@ -28,14 +30,18 @@ function AppSidebar() {
   const { taxonomy, taxonomyGroups, categoryLookup } = useTaxonomyContext();
   const sidebarTagInput = sidebarCategoryInputs[sidebarTagSearchKey] ?? "";
   const selectedSidebarTags = taxonomy.tags.filter((tag) => query.selectedTagIds.includes(tag.id));
+  const auth = useAuth();
 
   return (
     <aside className="sidebar">
       <div className="sidebar-section">
-        <p className="eyebrow">Saucer</p>
-        <h1>Recipe aggregator</h1>
+        <h1>{auth.user?.profile.preferred_username ? `${auth.user.profile.preferred_username}'s Saucer` : "Saucer"}</h1>
+        <p className="eyebrow">Recipe Aggregator</p>
         <p className="muted">Upload, Save, and Search Recipes.</p>
         <div className="button-row">
+          <button type="button" onClick={() => signOutRedirect()}>
+            Logout
+          </button>
           <button type="button" onClick={() => openCreateEditor("website")}>
             Upload Recipe
           </button>

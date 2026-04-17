@@ -2,9 +2,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createDefaultTaxonomy } from "./defaultTaxonomy.js";
+import { ConflictError, NotFoundError } from "./errors.js";
 import type {
   AppState,
-  Change,
   Mutation,
   Recipe,
   RecipeIndexEntry,
@@ -13,9 +13,6 @@ import type {
   TaxonomyDocument,
 } from "./types.js";
 
-export class ConflictError extends Error {}
-export class NotFoundError extends Error {}
-
 function createDefaultState(): AppState {
   return {
     recipesByUser: {},
@@ -23,6 +20,10 @@ function createDefaultState(): AppState {
     changes: [],
     processedMutations: {},
   };
+}
+
+function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
 function toIngredientNames(recipe: Recipe): string[] {
@@ -68,7 +69,11 @@ export class FileAppStore {
     try {
       const raw = await readFile(this.filePath, "utf8");
       this.state = JSON.parse(raw) as AppState;
-    } catch {
+    } catch (error) {
+      if (!isMissingFileError(error)) {
+        throw error;
+      }
+
       this.state = createDefaultState();
       await this.persist();
     }
@@ -102,10 +107,7 @@ export class FileAppStore {
     revision: number,
   ): void {
     state.changes.push({
-      seq:
-        state.changes.length === 0
-          ? 1
-          : state.changes[state.changes.length - 1].seq + 1,
+      seq: state.changes.length === 0 ? 1 : state.changes[state.changes.length - 1].seq + 1,
       userId,
       entityType,
       entityId,
@@ -201,11 +203,7 @@ export class FileAppStore {
     });
   }
 
-  async deleteRecipe(
-    userId: string,
-    recipeId: string,
-    baseRevision?: number,
-  ): Promise<void> {
+  async deleteRecipe(userId: string, recipeId: string, baseRevision?: number): Promise<void> {
     return this.mutate((state) => {
       const recipes = this.getUserRecipes(state, userId);
       const existing = recipes.find((entry) => entry.id === recipeId);
@@ -241,8 +239,7 @@ export class FileAppStore {
     const latestSeq =
       relevantChanges.length > 0
         ? relevantChanges[relevantChanges.length - 1].seq
-        : state.changes.filter((change) => change.userId === userId).at(-1)?.seq ??
-          numericCursor;
+        : (state.changes.filter((change) => change.userId === userId).at(-1)?.seq ?? numericCursor);
 
     if (!cursor) {
       const taxonomyDocument = state.taxonomiesByUser[userId];
@@ -315,4 +312,16 @@ export class FileAppStore {
     }
     return this.getSyncPayload(userId);
   }
+}
+
+export interface AppStore {
+  getTaxonomy(userId: string): Promise<TaxonomyDocument>;
+  getSyncPayload(userId: string, cursor?: string): Promise<SyncPayload>;
+  applyMutations(userId: string, mutations: Mutation[]): Promise<SyncPayload>;
+  getRecipe(userId: string, recipeId: string): Promise<Recipe | undefined>;
+  saveTaxonomy(
+    userId: string,
+    taxonomy: Taxonomy,
+    baseRevision?: number,
+  ): Promise<TaxonomyDocument>;
 }

@@ -1,46 +1,24 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { useSaucerStore } from "../features/saucer/useSaucerStore";
-import { useRecipeEditorStore } from "../features/editor/useRecipeEditorStore";
-import type { RecipeEditorMode } from "../features/editor/types";
-import type { Recipe, RecipeDraft, SourceType, TagSuggestion } from "../lib/models";
+import { useSaucerStore } from "../saucer/useSaucerStore";
+import { useRecipeEditorStore } from "./useRecipeEditorStore";
 import {
   buildTagSuggestions,
   filterDraftSuggestionsByConfidence,
   getVisibleDraftTagIds,
-} from "../lib/taxonomy";
+} from "../../lib/taxonomy";
 
-export type { RecipeEditorMode };
+export function useRecipeEditorActions() {
+  return useRecipeEditorStore(
+    useShallow((state) => ({
+      openCreateEditor: state.openCreateEditor,
+      openEditEditor: state.openEditEditor,
+    })),
+  );
+}
 
-export type RecipeEditorContextValue = {
-  editorOpen: boolean;
-  editorMode: RecipeEditorMode;
-  draft: RecipeDraft;
-  draftImported: boolean;
-  showSourceControls: boolean;
-  uploadErrorActive: boolean;
-  isImporting: boolean;
-  visibleDraftSuggestions: TagSuggestion[];
-  visibleEditableTagIds: string[];
-  showSourceSelector: boolean;
-  showImportControls: boolean;
-  showDraftForm: boolean;
-  closeEditor: () => void;
-  openCreateEditor: (sourceType: SourceType) => void;
-  openEditEditor: (recipe: Recipe) => void;
-  updateDraft: (patch: Partial<RecipeDraft>) => void;
-  clearUploadError: () => void;
-  revealSourceControls: () => void;
-  selectSourceType: (sourceType: SourceType) => void;
-  importFromWebsite: () => Promise<void>;
-  importFromFile: (file: File | undefined) => Promise<void>;
-  toggleDraftTag: (tagId: string) => void;
-  createDraftTag: (categoryId: string, tagName: string) => Promise<void>;
-  saveDraft: () => Promise<void>;
-};
-
-export function useRecipeEditorContext(): RecipeEditorContextValue {
+export function useRecipeEditorViewModel() {
   const taxonomy = useSaucerStore((state) => state.taxonomy);
   const state = useRecipeEditorStore(
     useShallow((store) => ({

@@ -1,10 +1,8 @@
-import { useRecipeEditorContext } from "../context/recipe-editor-context";
-import { useTaxonomyFilterUiContext } from "../context/taxonomy-filter-ui-context";
-import { useTaxonomyContext } from "../context/taxonomy-context";
 import RecipeDraftFields from "../features/editor/components/RecipeDraftFields";
 import RecipeSourcePanel from "../features/editor/components/RecipeSourcePanel";
 import RecipeSuggestionPanel from "../features/editor/components/RecipeSuggestionPanel";
 import RecipeTagAssignmentPanel from "../features/editor/components/RecipeTagAssignmentPanel";
+import { useRecipeEditorModalViewModel } from "../features/editor/useRecipeEditorModalViewModel";
 
 function RecipeEditorModal() {
   const {
@@ -29,9 +27,13 @@ function RecipeEditorModal() {
     toggleDraftTag,
     createDraftTag,
     saveDraft,
-  } = useRecipeEditorContext();
-  const { editorCategoryInputs, setCategoryInput } = useTaxonomyFilterUiContext();
-  const { taxonomy, taxonomyGroups, categoryLookup, mealTimeCategory } = useTaxonomyContext();
+    editorCategoryInputs,
+    setEditorCategoryInput,
+    taxonomy,
+    taxonomyGroups,
+    categoryLookup,
+    mealTimeCategory,
+  } = useRecipeEditorModalViewModel();
 
   if (!editorOpen) {
     return null;
@@ -85,7 +87,7 @@ function RecipeEditorModal() {
             taxonomy={taxonomy}
             taxonomyGroups={taxonomyGroups}
             editorCategoryInputs={editorCategoryInputs}
-            setCategoryInput={setCategoryInput}
+            setCategoryInput={(_scope, categoryId, value) => setEditorCategoryInput(categoryId, value)}
             toggleDraftTag={toggleDraftTag}
             createDraftTag={createDraftTag}
           />

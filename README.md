@@ -1,6 +1,6 @@
 # Saucer
 
-Saucer is a local-first recipe app and a software experimentation project focused on how recipe data can be stored, searched, and moved between backends over time. Today it uses Obsidian-friendly markdown files and a local SQLite-style search index; future iterations are intended to explore SQL storage, cloud-backed storage, authentication, and cross-device recipe sync.
+Saucer is a local-first recipe app and experimentation project for recipe storage, taxonomy management, and backend portability. Today it authenticates with Cognito/OIDC, persists an Obsidian-friendly recipe snapshot locally, and keeps shared frontend state in focused Zustand stores and feature-scoped view-model hooks.
 
 ## Why this project exists
 
@@ -9,10 +9,11 @@ This project is intentionally more than a recipe organizer. It is also a place t
 - local-first application design
 - storage abstraction and backend portability
 - canonical tagging and search workflows
-- how an app can evolve from single-device storage to authenticated multi-device access
+- authenticated flows that can later grow into multi-device sync
 
 ## Current capabilities
 
+- Authenticate through Cognito hosted sign-in
 - Import recipes from websites, photos, text files, or manual entry
 - Review and edit extracted recipe drafts before saving
 - Organize recipes with canonical taxonomy tags
@@ -31,32 +32,50 @@ Then validate the project with:
 ```bash
 npm run typecheck
 npm run test
+npm run build
 ```
 
-## Current architecture
+## Frontend architecture
+
+- **Root-global auth:** `react-oidc-context` plus Cognito helpers in `src/features/auth/`
+- **Shared app state:** Zustand stores under `src/features/*/use*Store.ts`
+- **Render-path composition:** app shell and workspace surfaces compose feature view-model hooks directly
+- **Shared domain/adapters:** `src/lib/` holds models, taxonomy logic, extraction primitives, persistence adapters, and selectors
+- **Feature boundaries:** `src/features/` owns UI orchestration, auth/bootstrap flows, import validation, and persistence wiring
+
+## Runtime and storage
 
 - **Frontend:** React + TypeScript + Vite
-- **Current recipe storage:** Obsidian-friendly markdown-style recipe files
-- **Current local search:** `sql.js`-backed in-browser SQLite index
-- **Desktop shell:** Tauri support is present, with the app currently centered around the TypeScript codebase
+- **Desktop shell:** Tauri
+- **Persistence:** Obsidian-style markdown snapshot handled by `src/lib/persistence.ts`
+- **Local search/filtering:** selector-driven in-memory filtering and grouping
 
-The current setup is designed to keep storage concerns isolated so the project can later expand into SQL-backed and cloud-backed implementations without rewriting the whole app.
+The current setup keeps persistence and extraction isolated so the project can evolve toward richer local or cloud-backed storage without rewriting the app shell.
+
+## Auth configuration
+
+Provide these Vite environment variables before running the authenticated app:
+
+- `VITE_COGNITO_REGION`
+- `VITE_COGNITO_USER_POOL_ID`
+- `VITE_COGNITO_CLIENT_ID`
+- `VITE_COGNITO_DOMAIN`
 
 ## Project direction
 
 Planned future iterations include:
 
-- SQL-based storage adapters
+- additional storage adapters
 - cloud-backed recipe persistence
-- authentication and user accounts
-- cross-device sync so a user can access the same recipes from different computers
+- cross-device sync
+- richer import/extraction pipelines
 
 ## Project structure
 
-- `src/` — application UI, state, and domain logic
-- `src/lib/` — recipe models, extraction, taxonomy, persistence, selectors, and search index logic
-- `src/components/` — UI components and workspaces
-- `src/context/` — shared app state and context providers
+- `src/features/` — Zustand stores, feature hooks, view-models, and feature-specific boundaries
+- `src/lib/` — shared domain logic and platform adapters
+- `src/components/` — presentational components and workspace shells
+- `src/styles/` — shared styling for the app shell and feature surfaces
 - `src-tauri/` — thin desktop wrapper and Tauri configuration
 - `tests/` — unit and UI-focused test coverage
 

@@ -1,6 +1,5 @@
 import { create } from "zustand";
 
-import { extractDraftFromPhoto, extractDraftFromTextFile, extractDraftFromWebsite } from "../../lib/extraction";
 import type { Recipe, RecipeDraft, SourceType, Taxonomy } from "../../lib/models";
 import {
   buildTagSuggestions,
@@ -11,6 +10,7 @@ import {
 import { useSaucerStore } from "../saucer/useSaucerStore";
 import { useStatusStore } from "../status/useStatusStore";
 import { useTaxonomyUiStore } from "../taxonomy/useTaxonomyUiStore";
+import { importRecipeDraftFromFile, importRecipeDraftFromWebsite } from "./recipeImportService";
 import type { RecipeEditorMode } from "./types";
 
 function createInitialState() {
@@ -146,12 +146,6 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
   },
   importFromWebsite: async () => {
     const { draft } = get();
-    if (!draft.sourceRef.trim()) {
-      set({ uploadErrorActive: true });
-      useStatusStore.getState().updateStatus("Add a website URL to import from.", "error");
-      return;
-    }
-
     set({
       isImporting: true,
       uploadErrorActive: false,
@@ -159,7 +153,7 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
     useStatusStore.getState().updateStatus("Importing recipe from website...", "info");
 
     try {
-      const importedDraft = await extractDraftFromWebsite(draft.sourceRef.trim());
+      const importedDraft = await importRecipeDraftFromWebsite(draft.sourceRef);
       const taxonomy = useSaucerStore.getState().taxonomy;
       const autoSelectedTagIds = getAutoSelectedDraftTagIds(buildSuggestions(importedDraft, taxonomy));
 
@@ -197,10 +191,7 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
     useStatusStore.getState().updateStatus(`Importing ${file.name}...`, "info");
 
     try {
-      const importedDraft =
-        draft.sourceType === "photo"
-          ? await extractDraftFromPhoto(file)
-          : await extractDraftFromTextFile(file);
+      const importedDraft = await importRecipeDraftFromFile(file, draft.sourceType);
       const taxonomy = useSaucerStore.getState().taxonomy;
       const autoSelectedTagIds = getAutoSelectedDraftTagIds(buildSuggestions(importedDraft, taxonomy));
 

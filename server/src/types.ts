@@ -119,7 +119,4 @@ export interface ReplaceTaxonomyMutation {
   baseRevision?: number;
 }
 
-export type Mutation =
-  | UpsertRecipeMutation
-  | DeleteRecipeMutation
-  | ReplaceTaxonomyMutation;
+export type Mutation = UpsertRecipeMutation | DeleteRecipeMutation | ReplaceTaxonomyMutation;

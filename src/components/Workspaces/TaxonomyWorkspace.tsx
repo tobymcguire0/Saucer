@@ -1,12 +1,11 @@
-import { useTaxonomyAdminContext } from "../../context/taxonomy-admin-context";
-import { useTaxonomyBrowserUiContext } from "../../context/taxonomy-browser-ui-context";
-import { useTaxonomyContext } from "../../context/taxonomy-context";
 import CollapsibleTaxonomyCategory from "../taxonomy/CollapsibleTaxonomyCategory";
+import { useTaxonomyWorkspaceViewModel } from "../../features/taxonomy/useTaxonomyWorkspaceViewModel";
 
 function TaxonomyWorkspace() {
-  const { taxonomyGroups } = useTaxonomyContext();
-  const { collapsedCategoryIds, toggleCategoryCollapsed } = useTaxonomyBrowserUiContext();
   const {
+    taxonomyGroups,
+    collapsedCategoryIds,
+    toggleCategoryCollapsed,
     categoryForm,
     tagForm,
     aliasForm,
@@ -19,7 +18,7 @@ function TaxonomyWorkspace() {
     saveTag,
     saveAlias,
     mergeSelectedTags,
-  } = useTaxonomyAdminContext();
+  } = useTaxonomyWorkspaceViewModel();
 
   return (
     <div className="taxonomy-layout">

@@ -1,6 +1,5 @@
 import { create } from "zustand";
 
-import { ObsidianRecipeStore } from "../../lib/persistence";
 import type { Recipe, Taxonomy } from "../../lib/models";
 import {
   addAlias,
@@ -11,8 +10,7 @@ import {
   upsertTag,
 } from "../../lib/taxonomy";
 import { useStatusStore, type StatusTone } from "../status/useStatusStore";
-
-const recipeStore = new ObsidianRecipeStore();
+import { getRecipeStore } from "./recipeStore";
 
 function createInitialState() {
   return {
@@ -51,7 +49,7 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     set({ loading: true });
 
     try {
-      const snapshot = await recipeStore.load();
+      const snapshot = await getRecipeStore().load();
       set({
         recipes: snapshot.recipes,
         taxonomy: snapshot.taxonomy,
@@ -73,7 +71,7 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     }
   },
   replaceAll: async (recipes, taxonomy, message, tone = "success") => {
-    const snapshot = await recipeStore.replaceAll(recipes, taxonomy);
+    const snapshot = await getRecipeStore().replaceAll(recipes, taxonomy);
     set({
       recipes: snapshot.recipes,
       taxonomy: snapshot.taxonomy,
@@ -83,7 +81,7 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     useStatusStore.getState().updateStatus(message, tone);
   },
   deleteRecipe: async (recipeId) => {
-    const snapshot = await recipeStore.deleteRecipe(recipeId);
+    const snapshot = await getRecipeStore().deleteRecipe(recipeId);
     set({
       recipes: snapshot.recipes,
       taxonomy: snapshot.taxonomy,

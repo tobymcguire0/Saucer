@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 
-import { useSaucerStore } from "../features/saucer/useSaucerStore";
-import type { Taxonomy } from "../lib/models";
-import { getCategoryByName } from "../lib/taxonomy";
-import type { TaxonomyCategoryGroup } from "../lib/taxonomyView";
-import { buildTaxonomyCategoryGroups } from "../lib/taxonomyView";
+import { useSaucerStore } from "../saucer/useSaucerStore";
+import type { Taxonomy } from "../../lib/models";
+import { getCategoryByName } from "../../lib/taxonomy";
+import type { TaxonomyCategoryGroup } from "../../lib/taxonomyView";
+import { buildTaxonomyCategoryGroups } from "../../lib/taxonomyView";
 
-export type TaxonomyContextValue = {
+export type TaxonomyViewModel = {
   taxonomy: Taxonomy;
   taxonomyGroups: TaxonomyCategoryGroup[];
   tagLookup: Map<string, Taxonomy["tags"][number]>;
@@ -14,7 +14,7 @@ export type TaxonomyContextValue = {
   mealTimeCategory?: Taxonomy["categories"][number];
 };
 
-export function useTaxonomyContext(): TaxonomyContextValue {
+export function useTaxonomyViewModel(): TaxonomyViewModel {
   const taxonomy = useSaucerStore((state) => state.taxonomy);
 
   return useMemo(() => {

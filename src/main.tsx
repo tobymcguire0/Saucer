@@ -9,17 +9,9 @@ import "./styles/taxonomy-view.css";
 import "./styles/recipe-detail-view.css";
 import "./styles/rating-stars.css";
 import { AuthProvider } from "react-oidc-context";
+import { buildOidcAuthConfig } from "./features/auth/oidc";
 
-const cognitoAuthConfig = {
-  authority: `https://cognito-idp.${import.meta.env.VITE_COGNITO_REGION}.amazonaws.com/${import.meta.env.VITE_COGNITO_USER_POOL_ID}`,
-  client_id: import.meta.env.VITE_COGNITO_CLIENT_ID,
-  redirect_uri: window.location.origin,
-  response_type: "code",
-  scope: "email openid phone",
-  onSigninCallback: () => {
-    window.history.replaceState({}, document.title, window.location.pathname);
-  },
-};
+const cognitoAuthConfig = buildOidcAuthConfig();
   
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

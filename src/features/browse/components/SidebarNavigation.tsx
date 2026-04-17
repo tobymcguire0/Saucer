@@ -1,4 +1,4 @@
-import type { AppView } from "../../../context/app-shell-context";
+import type { AppView } from "../types";
 
 type SidebarNavigationProps = {
   activeView: AppView;

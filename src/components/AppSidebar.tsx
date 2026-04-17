@@ -1,21 +1,16 @@
-import { useAppShellContext } from "../context/app-shell-context";
-import { useRecipeEditorContext } from "../context/recipe-editor-context";
-import { useSearchContext } from "../context/search-context";
-import { useTaxonomyFilterUiContext } from "../context/taxonomy-filter-ui-context";
-import { useTaxonomyContext } from "../context/taxonomy-context";
 import RandomDishPanel from "../features/browse/components/RandomDishPanel";
 import SearchFilterPanel from "../features/browse/components/SearchFilterPanel";
 import SidebarHeader from "../features/browse/components/SidebarHeader";
 import SidebarNavigation from "../features/browse/components/SidebarNavigation";
-import { signOutRedirect } from "../App";
-import { useAuth } from "react-oidc-context";
-
-const sidebarTagSearchKey = "__all__";
+import { useAppSidebarViewModel } from "../features/app/useAppSidebarViewModel";
 
 function AppSidebar() {
-  const { activeView, setActiveWorkspace } = useAppShellContext();
-  const { openCreateEditor } = useRecipeEditorContext();
   const {
+    activeView,
+    setActiveWorkspace,
+    username,
+    onLogout,
+    onUploadRecipe,
     query,
     groupByCategoryId,
     randomIngredientInput,
@@ -25,19 +20,20 @@ function AppSidebar() {
     updateRandomIngredientSearch,
     toggleFilterTag,
     chooseRandomRecipe,
-  } = useSearchContext();
-  const { sidebarCategoryInputs, setCategoryInput } = useTaxonomyFilterUiContext();
-  const { taxonomy, taxonomyGroups, categoryLookup } = useTaxonomyContext();
-  const sidebarTagInput = sidebarCategoryInputs[sidebarTagSearchKey] ?? "";
-  const selectedSidebarTags = taxonomy.tags.filter((tag) => query.selectedTagIds.includes(tag.id));
-  const auth = useAuth();
+    taxonomy,
+    taxonomyGroups,
+    categoryLookup,
+    sidebarTagInput,
+    selectedSidebarTags,
+    setSidebarTagInput,
+  } = useAppSidebarViewModel();
 
   return (
     <aside className="sidebar">
       <SidebarHeader
-        username={auth.user?.profile.preferred_username}
-        onLogout={signOutRedirect}
-        onUploadRecipe={() => openCreateEditor("website")}
+        username={username}
+        onLogout={onLogout}
+        onUploadRecipe={onUploadRecipe}
       />
       <SidebarNavigation activeView={activeView} setActiveWorkspace={setActiveWorkspace} />
       <RandomDishPanel
@@ -56,9 +52,9 @@ function AppSidebar() {
         updateSearchText={updateSearchText}
         updateSortBy={updateSortBy}
         updateGroupByCategory={updateGroupByCategory}
-        setCategoryInput={setCategoryInput}
+        setCategoryInput={(_scope, _categoryId, value) => setSidebarTagInput(value)}
         toggleFilterTag={toggleFilterTag}
-        sidebarTagSearchKey={sidebarTagSearchKey}
+        sidebarTagSearchKey="__all__"
       />
     </aside>
   );

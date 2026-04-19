@@ -1,66 +1,50 @@
-// ── Recipes─────────────────────────────────────────────────────────────────
+export const sourceTypes = ["website", "photo", "text", "manual"] as const;
+export type SourceType = (typeof sourceTypes)[number];
 
 export interface Ingredient {
-  name?: string;
-  raw?: string;
+  id: string;
+  name: string;
+  raw: string;
 }
 
 export interface Recipe {
   id: string;
   title: string;
   summary?: string;
-  sourceType?: string;
-  cuisine?: string;
-  mealType?: string;
-  servings?: number;
-  rating?: number;
-  tagIds?: string[];
+  sourceType?: SourceType;
+  sourceRef?: string;
+  heroImage?: string;
   ingredients: Ingredient[];
-  thumbnailUrl?: string;
-  heroImage?: string;
-  createdAt: string;
-  updatedAt: string;
-  revision: number;
-  deletedAt?: string;
-  [key: string]: unknown;
-}
-
-export interface RecipeIndexEntry {
-  id: string;
-  title: string;
-  summary?: string;
-  sourceType?: string;
+  instructions?: string[];
+  servings?: string;
   cuisine?: string;
   mealType?: string;
-  servings?: number;
   rating?: number;
   tagIds?: string[];
-  ingredientNames: string[];
-  thumbnailUrl?: string;
-  heroImage?: string;
   createdAt: string;
   updatedAt: string;
   revision: number;
 }
 
-// ── Taxonomy ────────────────────────────────────────────────────────────────
+export type RecipeInput = Omit<Recipe, "createdAt" | "updatedAt" | "revision">;
 
-export interface TaxonomyCategory {
+export interface Category {
   id: string;
   name: string;
   description: string;
 }
 
-export interface TaxonomyTag {
+export interface Tag {
   id: string;
   categoryId: string;
   name: string;
+  description?: string;
   aliases: string[];
 }
 
 export interface Taxonomy {
-  categories: TaxonomyCategory[];
-  tags: TaxonomyTag[];
+  categories: Category[];
+  tags: Tag[];
 }
 
 export interface TaxonomyDocument {
@@ -69,54 +53,23 @@ export interface TaxonomyDocument {
   updatedAt: string;
 }
 
-// ── Sync & Persistence ──────────────────────────────────────────────────────
-
-export interface Change {
-  seq: number;
-  userId: string;
-  entityType: string;
-  entityId: string;
-  changeType: string;
-  revision: number;
-  changedAt: string;
-}
-
-export interface AppState {
-  recipesByUser: Record<string, Recipe[]>;
-  taxonomiesByUser: Record<string, TaxonomyDocument>;
-  changes: Change[];
-  processedMutations: Record<string, string[]>;
-}
-
 export interface SyncPayload {
-  recipes: RecipeIndexEntry[];
+  recipes: Recipe[];
   deletedIds: string[];
-  taxonomy?: Taxonomy;
-  taxonomyRevision?: number;
   cursor: string;
 }
-
-// ── Mutations (client → server sync pushes) ─────────────────────────────────
 
 export interface UpsertRecipeMutation {
   type: "upsertRecipe";
   clientMutationId: string;
-  recipe: Partial<Recipe> & { id: string };
-  baseRevision?: number;
+  recipe: RecipeInput;
 }
 
 export interface DeleteRecipeMutation {
   type: "deleteRecipe";
   clientMutationId: string;
   recipeId: string;
-  baseRevision?: number;
+  revision: number;
 }
 
-export interface ReplaceTaxonomyMutation {
-  type: "replaceTaxonomy";
-  clientMutationId: string;
-  taxonomy: Taxonomy;
-  baseRevision?: number;
-}
-
-export type Mutation = UpsertRecipeMutation | DeleteRecipeMutation | ReplaceTaxonomyMutation;
+export type Mutation = UpsertRecipeMutation | DeleteRecipeMutation;

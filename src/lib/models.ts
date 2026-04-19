@@ -45,6 +45,7 @@ export interface Recipe {
   tagIds: string[];
   createdAt: string;
   updatedAt: string;
+  revision?: number;
 }
 
 export interface TagSuggestion {

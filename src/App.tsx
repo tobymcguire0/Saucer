@@ -5,9 +5,11 @@ import StatusBar from "./components/StatusBar";
 import { useAppBootstrap } from "./features/app/useAppBootstrap";
 import { useAppShellViewModel } from "./features/app/useAppShellViewModel";
 import { useRequireAuth } from "./features/auth/useRequireAuth";
+import { useSyncEffect } from "./features/sync/useSyncEffect";
 
 function AppContent() {
   useAppBootstrap();
+  useSyncEffect();
   const { loading } = useAppShellViewModel();
 
   return (

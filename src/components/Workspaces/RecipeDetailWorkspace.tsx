@@ -1,16 +1,11 @@
 import { useEffect, useState } from "react";
-import { useAppShellContext } from "../../context/app-shell-context";
-import { useRecipeCatalogContext } from "../../context/recipe-catalog-context";
-import { useRecipeEditorContext } from "../../context/recipe-editor-context";
-import { useTaxonomyContext } from "../../context/taxonomy-context";
 import { sortTagIdsForPreview } from "../recipeTagPreview";
 import StarRating from "../StarRating";
+import { useRecipeDetailViewModel } from "../../features/browse/useRecipeDetailViewModel";
 
 function RecipeDetailWorkspace() {
-  const { closeRecipeDetail } = useAppShellContext();
-  const { selectedRecipe: recipe, deleteRecipe, updateRecipeRating } = useRecipeCatalogContext();
-  const { openEditEditor } = useRecipeEditorContext();
-  const { tagLookup, categoryLookup } = useTaxonomyContext();
+  const { recipe, closeRecipeDetail, deleteRecipe, updateRecipeRating, openEditEditor, tagLookup, categoryLookup } =
+    useRecipeDetailViewModel();
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const sortedTagIds = recipe
     ? sortTagIdsForPreview(recipe.tagIds, tagLookup, categoryLookup)

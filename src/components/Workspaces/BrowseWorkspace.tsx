@@ -1,16 +1,18 @@
-import { useAppShellContext } from "../../context/app-shell-context";
-import { useRecipeCatalogContext } from "../../context/recipe-catalog-context";
-import { useRecipeEditorContext } from "../../context/recipe-editor-context";
-import { useSearchContext } from "../../context/search-context";
-import { useTaxonomyContext } from "../../context/taxonomy-context";
 import RecipeCard from "../RecipeCard";
+import { useBrowseWorkspaceViewModel } from "../../features/browse/useBrowseWorkspaceViewModel";
 
 function BrowseWorkspace() {
-  const { openRecipeDetail } = useAppShellContext();
-  const { visibleRecipes, groupedRecipes, deleteRecipe, updateRecipeRating } = useRecipeCatalogContext();
-  const { openEditEditor } = useRecipeEditorContext();
-  const { groupByCategoryId } = useSearchContext();
-  const { tagLookup, categoryLookup } = useTaxonomyContext();
+  const {
+    groupByCategoryId,
+    visibleRecipes,
+    groupedRecipes,
+    deleteRecipe,
+    updateRecipeRating,
+    openEditEditor,
+    openRecipeDetail,
+    tagLookup,
+    categoryLookup,
+  } = useBrowseWorkspaceViewModel();
 
   if (groupByCategoryId) {
     return (

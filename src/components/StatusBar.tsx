@@ -1,7 +1,7 @@
-import { useStatusContext } from "../context/status-context";
+import { useStatusViewModel } from "../features/status/useStatusViewModel";
 
 function StatusBar() {
-  const { statusMessage, statusTone, statusExpanded } = useStatusContext();
+  const { statusMessage, statusTone, statusExpanded } = useStatusViewModel();
 
   return (
     <div

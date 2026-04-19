@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,12 +22,13 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
 }));
 
-import App from "../src/App";
+import { renderApp, resetMockAuth } from "./renderApp";
 
 describe("upload inputs", () => {
   beforeEach(() => {
     window.localStorage.clear();
     invokeMock.mockReset();
+    resetMockAuth();
   });
 
   afterEach(() => {
@@ -37,10 +38,10 @@ describe("upload inputs", () => {
   it("shows only source controls before a website import succeeds", async () => {
     const user = userEvent.setup();
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
-      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+      expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
     await user.click(screen.getByRole("button", { name: "Upload Recipe" }));
@@ -57,10 +58,10 @@ describe("upload inputs", () => {
   it("shows the full form immediately for manual entry", async () => {
     const user = userEvent.setup();
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
-      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+      expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
     await user.click(screen.getByRole("button", { name: "Upload Recipe" }));
@@ -97,10 +98,10 @@ describe("upload inputs", () => {
       `,
     });
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
-      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+      expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
     await user.click(screen.getByRole("button", { name: "Upload Recipe" }));
@@ -124,10 +125,10 @@ describe("upload inputs", () => {
     const user = userEvent.setup();
     invokeMock.mockRejectedValue(new Error("failed to fetch"));
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
-      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+      expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
     await user.click(screen.getByRole("button", { name: "Upload Recipe" }));
@@ -147,10 +148,10 @@ describe("upload inputs", () => {
   it("hydrates the draft fields after uploading a text recipe file", async () => {
     const user = userEvent.setup();
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
-      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+      expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
     await user.click(screen.getByRole("button", { name: "Upload Recipe" }));

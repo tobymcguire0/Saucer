@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
-import App from "../src/App";
+import { renderApp, resetMockAuth } from "./renderApp";
 
 function findTagId(taxonomy: Taxonomy, categoryName: string, tagName: string) {
   const category = taxonomy.categories.find((entry) => entry.name === categoryName);
@@ -45,6 +45,7 @@ async function seedRecipe(recipe: Recipe, taxonomy: Taxonomy) {
 describe("recipe browse and detail UI", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    resetMockAuth();
   });
 
   afterEach(() => {
@@ -87,7 +88,7 @@ describe("recipe browse and detail UI", () => {
     await seedRecipe(recipe, taxonomy);
 
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Open Layered Pasta Bake" })).toBeTruthy(),
@@ -131,7 +132,7 @@ describe("recipe browse and detail UI", () => {
     await seedRecipe(recipe, taxonomy);
 
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const card = await screen.findByTestId("recipe-card-recipe-star-test");
     const fourStar = within(card).getByRole("button", { name: "Rate Star Test: 4 stars" });
@@ -171,7 +172,7 @@ describe("recipe browse and detail UI", () => {
     await seedRecipe(recipe, taxonomy);
 
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     const card = await screen.findByTestId("recipe-card-recipe-delete-test");
 
@@ -209,7 +210,7 @@ describe("recipe browse and detail UI", () => {
     await seedRecipe(recipe, taxonomy);
 
     const user = userEvent.setup();
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Pick random recipe" })).toBeTruthy(),
@@ -222,10 +223,10 @@ describe("recipe browse and detail UI", () => {
   });
 
   it("highlights the active workspace button with nav-active class", async () => {
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
-      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+      expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
     const browseBtn = screen.getByRole("button", { name: "Browse recipes" });
@@ -244,10 +245,10 @@ describe("recipe browse and detail UI", () => {
   it("creates a new tag under an existing category while editing a recipe draft", async () => {
     const user = userEvent.setup();
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
-      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+      expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
     await user.click(screen.getByRole("button", { name: "Upload Recipe" }));
@@ -272,10 +273,10 @@ describe("recipe browse and detail UI", () => {
   it("shows only relevant draft taxonomy chips above the confidence threshold", async () => {
     const user = userEvent.setup();
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
-      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+      expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
     await user.click(screen.getByRole("button", { name: "Upload Recipe" }));
@@ -309,10 +310,10 @@ describe("recipe browse and detail UI", () => {
   it("shows unified sidebar taxonomy matches with category previews after typing", async () => {
     const user = userEvent.setup();
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
-      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+      expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
     expect(screen.queryByRole("button", { name: "Italian" })).toBeNull();
@@ -328,10 +329,10 @@ describe("recipe browse and detail UI", () => {
   it("starts taxonomy browser categories collapsed and expands them on demand", async () => {
     const user = userEvent.setup();
 
-    render(<App />);
+    renderApp();
 
     await waitFor(() =>
-      expect(screen.getByText("Cookbook loaded from local Obsidian-style storage.")).toBeTruthy(),
+      expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
     await user.click(screen.getByRole("button", { name: "Manage taxonomy" }));

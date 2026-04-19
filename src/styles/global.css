@@ -4,14 +4,12 @@
   --line-height-base: 1.5;
   --color-text: #fffffe;
   --color-muted: #abd1c6;
-  --color-background:
-    radial-gradient(circle at top, rgba(249, 188, 96, 0.14), transparent 38%),
-    #004643;
-  --color-panel: rgba(0, 30, 29, 0.72);
-  --color-panel-border: rgba(171, 209, 198, 0.22);
-  --color-input: rgba(171, 209, 198, 0.08);
-  --color-input-border: rgba(171, 209, 198, 0.28);
-  --color-chip: rgba(171, 209, 198, 0.14);
+  --color-background:#004643;
+  --color-panel: #001e1db8;
+  --color-panel-border: #abd1c638;
+  --color-input: #abd1c614;
+  --color-input-border: #abd1c647;
+  --color-chip: #abd1c624;
   --color-accent: #f9bc60;
   --color-accent-hover: #ffd08ad5;
   --color-accent-soft: rgba(249, 188, 96, 0.2);
@@ -79,7 +77,7 @@ button.secondary,
 
 button.secondary:hover,
 .chip:hover {
-  background: rgba(171, 209, 198, 0.22);
+  background: #abd1c638;
 }
 
 .button-row,

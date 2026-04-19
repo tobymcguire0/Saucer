@@ -2,11 +2,13 @@ import AppWorkspace from "./components/AppWorkspace";
 import AppSidebar from "./components/AppSidebar";
 import RecipeEditorModal from "./components/RecipeEditorModal";
 import StatusBar from "./components/StatusBar";
-import AppProvider from "./context/AppProvider";
-import { useAppShellContext } from "./context/app-shell-context";
+import { useAppBootstrap } from "./features/app/useAppBootstrap";
+import { useAppShellViewModel } from "./features/app/useAppShellViewModel";
+import { useRequireAuth } from "./features/auth/useRequireAuth";
 
 function AppContent() {
-  const { loading } = useAppShellContext();
+  useAppBootstrap();
+  const { loading } = useAppShellViewModel();
 
   return (
     <main className="app-shell">
@@ -20,11 +22,26 @@ function AppContent() {
 }
 
 function App() {
-  return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
-  );
+  const auth = useRequireAuth();
+
+  if (auth.isLoading) {
+    return <div>Loading...</div>;
+  }
+
+  if (auth.error) {
+    return (
+      <div>
+        <p>Authentication error: {auth.error.message}</p>
+        <button onClick={() => auth.signinRedirect()}>Try again</button>
+      </div>
+    );
+  }
+
+  if (auth.isAuthenticated) {
+    return <AppContent />;
+  }
+
+  return <div>Redirecting to sign in…</div>;
 }
 
 export default App;

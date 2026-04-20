@@ -1,19 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import sharp from "sharp";
-import { verifyCognitoToken } from "./auth.js";
-import { HttpError } from "./errors.js";
 import type { AppStore } from "./store.js";
-import { uploadToS3 } from "./s3.js";
-import {
-  parseCursorParam,
-  parseMutationsBody,
-  parseRecipeIdParam,
-  parseTaxonomyBody,
-  parseWebsiteImportUrl,
-} from "./validation.js";
+import type { Mutation, Taxonomy } from "./types.js";
 
 declare global {
   namespace Express {
@@ -23,218 +15,166 @@ declare global {
   }
 }
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
-});
+type VerifyToken = (token: string) => Promise<{ sub: string }>;
+type FetchImpl = typeof fetch;
 
-interface VerifiedTokenPayload {
-  sub: string;
-}
-
-type VerifyToken = (token: string) => Promise<VerifiedTokenPayload>;
-
-interface UploadedImage {
-  imageUrl: string;
-  thumbnailUrl: string;
-}
-
-interface AppDependencies {
+interface AppConfig {
   store: AppStore;
-  verifyToken?: VerifyToken;
-  fetchImpl?: typeof fetch;
-  uploadImage?: (file: Express.Multer.File) => Promise<UploadedImage>;
+  verifyToken: VerifyToken;
+  fetchImpl: FetchImpl;
 }
 
-async function defaultUploadImage(file: Express.Multer.File): Promise<UploadedImage> {
-  const imageId = randomUUID();
-  const imageBuffer = await sharp(file.buffer).jpeg({ quality: 90 }).toBuffer();
-  const thumbnailBuffer = await sharp(file.buffer)
-    .resize({ width: 480, height: 480, fit: "cover" })
-    .jpeg({ quality: 82 })
-    .toBuffer();
+const upload = multer({ storage: multer.memoryStorage() });
 
-  const [imageUrl, thumbnailUrl] = await Promise.all([
-    uploadToS3(`images/${imageId}.jpg`, imageBuffer, "image/jpeg"),
-    uploadToS3(`thumbs/${imageId}.jpg`, thumbnailBuffer, "image/jpeg"),
-  ]);
-
-  return { imageUrl, thumbnailUrl };
-}
-
-export function createApp({
-  store,
-  verifyToken = verifyCognitoToken as VerifyToken,
-  fetchImpl = fetch,
-  uploadImage = defaultUploadImage,
-}: AppDependencies) {
+export function createApp({ store, verifyToken, fetchImpl }: AppConfig) {
   const app = express();
+  app.use(express.json());
+  app.use(cors());
 
-  app.use(cors({ origin: true, credentials: true }));
-  app.use(express.json({ limit: "2mb" }));
+  function requireAuth(req: Request, res: Response, next: NextFunction): void {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Missing Bearer token." });
+      return;
+    }
+    const token = authHeader.slice(7);
+    verifyToken(token)
+      .then(({ sub }) => {
+        req.userId = sub;
+        next();
+      })
+      .catch(() => {
+        res.status(401).json({ error: "Invalid token." });
+      });
+  }
 
-  app.get("/api/health", (_request: Request, response: Response) => {
-    response.json({ ok: true });
+  function getClientId(req: Request, res: Response): string | null {
+    const clientId = req.headers["x-client-id"];
+    if (!clientId || typeof clientId !== "string" || clientId.trim() === "") {
+      res.status(400).json({ error: "X-Client-Id header is required." });
+      return null;
+    }
+    return clientId;
+  }
+
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: true });
   });
 
-  const requireAuth = async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      const authorization = request.headers.authorization;
-      if (!authorization?.startsWith("Bearer ")) {
-        response.status(401).json({ error: "Missing Bearer token." });
+  app.get("/api/bootstrap", requireAuth, async (req, res) => {
+    const clientId = getClientId(req, res);
+    if (!clientId) return;
+
+    const [syncPayload, taxonomyDoc] = await Promise.all([
+      store.getSyncPayload(req.userId, clientId),
+      store.getTaxonomy(req.userId),
+    ]);
+    res.json({
+      recipes: syncPayload.recipes,
+      deletedIds: syncPayload.deletedIds,
+      taxonomy: taxonomyDoc.taxonomy,
+      taxonomyRevision: taxonomyDoc.revision,
+      cursor: syncPayload.cursor,
+    });
+  });
+
+  app.get("/api/sync/changes", requireAuth, async (req, res) => {
+    const clientId = getClientId(req, res);
+    if (!clientId) return;
+
+    const cursor = req.query["cursor"] as string | undefined;
+    if (cursor !== undefined && !/^\d+$/.test(cursor)) {
+      res.status(400).json({ error: "cursor must be a numeric string." });
+      return;
+    }
+    const payload = await store.getSyncPayload(req.userId, clientId, cursor);
+    res.json(payload);
+  });
+
+  app.post("/api/sync/push", requireAuth, async (req, res) => {
+    const clientId = getClientId(req, res);
+    if (!clientId) return;
+
+    const body = req.body as { mutations?: unknown };
+    if (!Array.isArray(body.mutations)) {
+      res.status(400).json({ error: "mutations array is required." });
+      return;
+    }
+    for (const m of body.mutations) {
+      const mutation = m as Record<string, unknown>;
+      if (mutation["type"] === "upsertRecipe") {
+        const recipe = mutation["recipe"] as Record<string, unknown> | undefined;
+        if (!recipe?.["id"]) {
+          res.status(400).json({ error: "Recipe id is required." });
+          return;
+        }
+      }
+    }
+    const payload = await store.applyMutations(req.userId, clientId, body.mutations as Mutation[]);
+    res.json(payload);
+  });
+
+  app.get("/api/recipes/:id", requireAuth, async (req, res) => {
+    const recipe = await store.getRecipe(req.userId, req.params["id"] as string);
+    if (!recipe) {
+      res.status(404).json({ error: "Recipe not found." });
+      return;
+    }
+    res.json(recipe);
+  });
+
+  app.put("/api/taxonomy", requireAuth, async (req, res) => {
+    const body = req.body as { categories?: unknown; tags?: unknown };
+    if (!Array.isArray(body.categories) || !Array.isArray(body.tags)) {
+      res
+        .status(400)
+        .json({ error: "Taxonomy payload must include categories and tags arrays." });
+      return;
+    }
+    const doc = await store.saveTaxonomy(req.userId, body as unknown as Taxonomy);
+    res.json(doc);
+  });
+
+  app.post(
+    "/api/images/upload",
+    requireAuth,
+    upload.single("image"),
+    async (req, res) => {
+      if (!req.file) {
+        res.status(400).json({ error: "Image upload is required." });
         return;
       }
 
-      const token = authorization.slice("Bearer ".length);
-      const payload = await verifyToken(token);
-      request.userId = payload.sub;
-      next();
-    } catch {
-      response.status(401).json({ error: "Invalid or expired token." });
-    }
-  };
+      const s3 = new S3Client({ region: process.env["AWS_REGION"] });
+      const buffer = await sharp(req.file.buffer).jpeg().toBuffer();
+      const key = `images/${req.userId}/${randomUUID()}.jpg`;
+      const bucket = process.env["S3_BUCKET_NAME"] ?? "saucer-s3";
 
-  const apiRouter = express.Router();
-  apiRouter.use(requireAuth);
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: buffer,
+          ContentType: "image/jpeg",
+        }),
+      );
 
-  apiRouter.get("/bootstrap", async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      const userId = request.userId;
-      const [taxonomyDocument, syncPayload] = await Promise.all([
-        store.getTaxonomy(userId),
-        store.getSyncPayload(userId),
-      ]);
-
-      response.json({
-        recipes: syncPayload.recipes,
-        deletedIds: syncPayload.deletedIds,
-        taxonomy: taxonomyDocument.taxonomy,
-        taxonomyRevision: taxonomyDocument.revision,
-        cursor: syncPayload.cursor,
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  apiRouter.get(
-    "/sync/changes",
-    async (request: Request, response: Response, next: NextFunction) => {
-      try {
-        const cursor = parseCursorParam(request.query.cursor);
-        response.json(await store.getSyncPayload(request.userId, cursor));
-      } catch (error) {
-        next(error);
-      }
+      res.json({ imageUrl: `https://${bucket}.s3.amazonaws.com/${key}` });
     },
   );
 
-  apiRouter.post("/sync/push", async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      const mutations = parseMutationsBody(request.body);
-      response.json(await store.applyMutations(request.userId, mutations));
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  apiRouter.get(
-    "/recipes/:id",
-    async (request: Request, response: Response, next: NextFunction) => {
-      try {
-        const recipeId = parseRecipeIdParam(request.params.id);
-        const recipe = await store.getRecipe(request.userId, recipeId);
-
-        if (!recipe) {
-          response.status(404).json({ error: "Recipe not found." });
-          return;
-        }
-
-        response.json(recipe);
-      } catch (error) {
-        next(error);
-      }
-    },
-  );
-
-  apiRouter.put("/taxonomy", async (request: Request, response: Response, next: NextFunction) => {
-    try {
-      const { taxonomy, baseRevision } = parseTaxonomyBody(request.body);
-      const document = await store.saveTaxonomy(request.userId, taxonomy, baseRevision);
-      response.json(document);
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  apiRouter.post(
-    "/images/upload",
-    upload.single("image"),
-    async (request: Request, response: Response, next: NextFunction) => {
-      try {
-        if (!request.file) {
-          response.status(400).json({ error: "Image upload is required." });
-          return;
-        }
-
-        response.status(201).json(await uploadImage(request.file));
-      } catch (error) {
-        next(error);
-      }
-    },
-  );
-
-  apiRouter.post(
-    "/import/website",
-    async (request: Request, response: Response, next: NextFunction) => {
-      try {
-        const url = parseWebsiteImportUrl(request.body);
-        const fetched = await fetchImpl(url, {
-          redirect: "follow",
-          headers: {
-            "User-Agent": "Saucer/0.1",
-          },
-        });
-
-        if (!fetched.ok) {
-          response.status(502).json({ error: `Failed to fetch recipe page (${fetched.status}).` });
-          return;
-        }
-
-        response.json({
-          url: fetched.url,
-          html: await fetched.text(),
-        });
-      } catch (error) {
-        next(error);
-      }
-    },
-  );
-
-  app.use("/api", apiRouter);
-
-  app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
-    if (error instanceof SyntaxError && "body" in error) {
-      response.status(400).json({ error: "Invalid JSON body." });
+  app.post("/api/import/website", requireAuth, async (req, res) => {
+    const { url } = req.body as { url?: string };
+    if (!url || !/^https?:\/\//i.test(url)) {
+      res.status(400).json({ error: "A valid http(s) URL is required." });
       return;
     }
-
-    if (error instanceof multer.MulterError) {
-      response.status(400).json({ error: error.message });
-      return;
-    }
-
-    if (error instanceof HttpError) {
-      response.status(error.statusCode).json({ error: error.message });
-      return;
-    }
-
-    if (error instanceof Error) {
-      response.status(500).json({ error: error.message });
-      return;
-    }
-
-    response.status(500).json({ error: "Unknown server error." });
+    const response = await fetchImpl(url, {
+      redirect: "follow",
+      headers: { "User-Agent": "Saucer/0.1" },
+    });
+    const html = await response.text();
+    res.json({ url: response.url, html });
   });
 
   return app;

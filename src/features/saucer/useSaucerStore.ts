@@ -23,6 +23,8 @@ function createInitialState() {
 
 type SaucerStoreState = ReturnType<typeof createInitialState> & {
   initialize: () => Promise<void>;
+  bootstrapFromServer: (recipes: Recipe[], taxonomy: Taxonomy) => Promise<void>;
+  mergeServerChanges: (updatedRecipes: Recipe[], deletedIds: string[]) => void;
   replaceAll: (
     recipes: Recipe[],
     taxonomy: Taxonomy,
@@ -70,6 +72,30 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
       );
     }
   },
+  bootstrapFromServer: async (recipes, taxonomy) => {
+    const snapshot = await getRecipeStore().replaceAll(recipes, taxonomy);
+    set({
+      recipes: snapshot.recipes,
+      taxonomy: snapshot.taxonomy,
+      loading: false,
+      initialized: true,
+    });
+    useStatusStore.getState().updateStatus("Synced with server.", "success");
+  },
+  mergeServerChanges: (updatedRecipes, deletedIds) => {
+    const { recipes } = get();
+    const updatedMap = new Map(updatedRecipes.map((r) => [r.id, r]));
+    const deletedSet = new Set(deletedIds);
+    const merged = recipes
+      .filter((r) => !deletedSet.has(r.id))
+      .map((r) => updatedMap.get(r.id) ?? r);
+    for (const r of updatedRecipes) {
+      if (!recipes.find((existing) => existing.id === r.id)) {
+        merged.push(r);
+      }
+    }
+    set({ recipes: merged });
+  },
   replaceAll: async (recipes, taxonomy, message, tone = "success") => {
     const snapshot = await getRecipeStore().replaceAll(recipes, taxonomy);
     set({
@@ -89,6 +115,13 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
       initialized: true,
     });
     useStatusStore.getState().updateStatus("Recipe deleted.", "success");
+    const { useSyncStore } = await import("../sync/useSyncStore");
+    void useSyncStore.getState().pushMutation({
+      type: "deleteRecipe",
+      clientMutationId: crypto.randomUUID(),
+      recipeId,
+      revision: 0,
+    });
   },
   updateRecipeRating: async (recipeId, rating) => {
     const { recipes, taxonomy, replaceAll } = get();

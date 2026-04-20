@@ -275,6 +275,14 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       editorMode === "edit" ? "Recipe updated." : "Recipe created and indexed.",
     );
 
+    const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = nextRecipe;
+    const { useSyncStore } = await import("../sync/useSyncStore");
+    void useSyncStore.getState().pushMutation({
+      type: "upsertRecipe",
+      clientMutationId: crypto.randomUUID(),
+      recipe: recipeInput,
+    });
+
     useTaxonomyUiStore.getState().resetCategoryInputs("editor");
     set({
       editorOpen: false,

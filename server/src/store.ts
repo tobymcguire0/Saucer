@@ -1,327 +1,420 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-import { randomUUID } from "node:crypto";
-import { createDefaultTaxonomy } from "./defaultTaxonomy.js";
-import { ConflictError, NotFoundError } from "./errors.js";
+import { readFile, writeFile } from "node:fs/promises";
+import type { Pool, PoolClient } from "pg";
 import type {
-  AppState,
+  Ingredient,
   Mutation,
   Recipe,
-  RecipeIndexEntry,
+  RecipeInput,
+  SourceType,
   SyncPayload,
   Taxonomy,
   TaxonomyDocument,
 } from "./types.js";
 
-function createDefaultState(): AppState {
-  return {
-    recipesByUser: {},
-    taxonomiesByUser: {},
-    changes: [],
-    processedMutations: {},
-  };
+export interface AppStore {
+  getTaxonomy(userId: string): Promise<TaxonomyDocument>;
+  getSyncPayload(userId: string, clientId: string, cursor?: string): Promise<SyncPayload>;
+  applyMutations(userId: string, clientId: string, mutations: Mutation[]): Promise<SyncPayload>;
+  getRecipe(userId: string, recipeId: string): Promise<Recipe | null>;
+  saveTaxonomy(userId: string, taxonomy: Taxonomy): Promise<TaxonomyDocument>;
 }
 
-function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
-  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+// ── FileAppStore ──────────────────────────────────────────────────────────────
+
+interface StoredRecipe {
+  id: string;
+  title: string;
+  summary?: string;
+  sourceType?: SourceType;
+  sourceRef?: string;
+  heroImage?: string;
+  ingredients: Ingredient[];
+  instructions?: string[];
+  servings?: string;
+  cuisine?: string;
+  mealType?: string;
+  rating?: number;
+  tagIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+  revision: number;
+  deletedAt?: string;
 }
 
-function toIngredientNames(recipe: Recipe): string[] {
-  return [
-    ...new Set(
-      recipe.ingredients
-        .map((ingredient) => ingredient.name || ingredient.raw)
-        .filter(Boolean) as string[],
-    ),
-  ];
+interface UserData {
+  revision: number;
+  recipes: Record<string, StoredRecipe | undefined>;
+  appliedMutations: string[];
+  taxonomy: TaxonomyDocument | null;
+  clientCursors: Record<string, number>;
 }
 
-function toIndexEntry(recipe: Recipe): RecipeIndexEntry {
-  return {
-    id: recipe.id,
-    title: recipe.title,
-    summary: recipe.summary,
-    sourceType: recipe.sourceType,
-    cuisine: recipe.cuisine,
-    mealType: recipe.mealType,
-    servings: recipe.servings,
-    rating: recipe.rating,
-    tagIds: recipe.tagIds,
-    ingredientNames: toIngredientNames(recipe),
-    thumbnailUrl: recipe.thumbnailUrl ?? recipe.heroImage,
-    heroImage: recipe.heroImage,
-    createdAt: recipe.createdAt,
-    updatedAt: recipe.updatedAt,
-    revision: recipe.revision,
-  };
+interface StoreData {
+  users: Record<string, UserData | undefined>;
 }
 
-export class FileAppStore {
-  private state: AppState = createDefaultState();
-  private loaded = false;
+function toRecipe(stored: StoredRecipe): Recipe {
+  const { deletedAt: _, ...recipe } = stored;
+  return recipe as Recipe;
+}
 
-  constructor(private filePath: string) {}
+const emptyTaxonomy = (): TaxonomyDocument => ({
+  taxonomy: { categories: [], tags: [] },
+  revision: 0,
+  updatedAt: new Date().toISOString(),
+});
 
-  private async loadState(): Promise<AppState> {
-    if (this.loaded) {
-      return this.state;
+function buildFilePayload(user: UserData, cursorRev: number): SyncPayload {
+  const recipes: Recipe[] = [];
+  const deletedIds: string[] = [];
+  for (const stored of Object.values(user.recipes)) {
+    if (!stored || stored.revision <= cursorRev) continue;
+    if (stored.deletedAt !== undefined) {
+      deletedIds.push(stored.id);
+    } else {
+      recipes.push(toRecipe(stored));
     }
+  }
+  return { recipes, deletedIds, cursor: String(user.revision) };
+}
+
+export class FileAppStore implements AppStore {
+  private filePath: string;
+
+  constructor(filePath: string) {
+    this.filePath = filePath;
+  }
+
+  private async read(): Promise<StoreData> {
     try {
-      const raw = await readFile(this.filePath, "utf8");
-      this.state = JSON.parse(raw) as AppState;
-    } catch (error) {
-      if (!isMissingFileError(error)) {
-        throw error;
-      }
-
-      this.state = createDefaultState();
-      await this.persist();
+      const text = await readFile(this.filePath, "utf8");
+      return JSON.parse(text) as StoreData;
+    } catch {
+      return { users: {} };
     }
-    this.loaded = true;
-    return this.state;
   }
 
-  private async persist(): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, JSON.stringify(this.state, null, 2));
+  private async write(data: StoreData): Promise<void> {
+    await writeFile(this.filePath, JSON.stringify(data, null, 2), "utf8");
   }
 
-  private async mutate<T>(callback: (state: AppState) => T | Promise<T>): Promise<T> {
-    const state = await this.loadState();
-    const result = await callback(state);
-    await this.persist();
-    return result;
+  private ensureUser(data: StoreData, userId: string): UserData {
+    if (!data.users[userId]) {
+      data.users[userId] = {
+        revision: 0,
+        recipes: {},
+        appliedMutations: [],
+        taxonomy: null,
+        clientCursors: {},
+      };
+    }
+    const user = data.users[userId] as UserData;
+    user.clientCursors ??= {};
+    return user;
   }
 
-  private getUserRecipes(state: AppState, userId: string): Recipe[] {
-    state.recipesByUser[userId] ??= [];
-    return state.recipesByUser[userId];
+  async getSyncPayload(userId: string, clientId: string, cursor?: string): Promise<SyncPayload> {
+    const data = await this.read();
+    const user = this.ensureUser(data, userId);
+    const cursorRev = cursor !== undefined ? parseInt(cursor, 10) : 0;
+
+    user.clientCursors[clientId] = cursorRev;
+    await this.write(data);
+
+    return buildFilePayload(user, cursorRev);
   }
 
-  private recordChange(
-    state: AppState,
-    userId: string,
-    entityType: string,
-    entityId: string,
-    changeType: string,
-    revision: number,
-  ): void {
-    state.changes.push({
-      seq: state.changes.length === 0 ? 1 : state.changes[state.changes.length - 1].seq + 1,
-      userId,
-      entityType,
-      entityId,
-      changeType,
-      revision,
-      changedAt: new Date().toISOString(),
-    });
+  async saveRecipe(userId: string, input: RecipeInput): Promise<void> {
+    const data = await this.read();
+    const user = this.ensureUser(data, userId);
+    const now = new Date().toISOString();
+    const existing = user.recipes[input.id];
+
+    user.revision += 1;
+    user.recipes[input.id] = {
+      ...input,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      revision: user.revision,
+    };
+
+    await this.write(data);
   }
 
-  // ── Taxonomy──────────────────────────────────────────────────────────
+  async deleteRecipe(userId: string, recipeId: string, _revision: number): Promise<void> {
+    const data = await this.read();
+    const user = this.ensureUser(data, userId);
+    const existing = user.recipes[recipeId];
+    if (!existing || existing.deletedAt !== undefined) return;
+
+    user.revision += 1;
+    user.recipes[recipeId] = {
+      ...existing,
+      revision: user.revision,
+      deletedAt: new Date().toISOString(),
+    };
+
+    await this.write(data);
+  }
+
+  async applyMutations(userId: string, clientId: string, mutations: Mutation[]): Promise<SyncPayload> {
+    const data = await this.read();
+    const user = this.ensureUser(data, userId);
+    const applied = new Set(user.appliedMutations);
+
+    for (const mutation of mutations) {
+      if (applied.has(mutation.clientMutationId)) continue;
+      applied.add(mutation.clientMutationId);
+      user.appliedMutations.push(mutation.clientMutationId);
+
+      user.revision += 1;
+      const now = new Date().toISOString();
+
+      if (mutation.type === "upsertRecipe") {
+        const existing = user.recipes[mutation.recipe.id];
+        user.recipes[mutation.recipe.id] = {
+          ...mutation.recipe,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+          revision: user.revision,
+        };
+      } else if (mutation.type === "deleteRecipe") {
+        const existing = user.recipes[mutation.recipeId];
+        if (existing && existing.deletedAt === undefined) {
+          user.recipes[mutation.recipeId] = {
+            ...existing,
+            revision: user.revision,
+            deletedAt: now,
+          };
+        }
+      }
+    }
+
+    user.clientCursors[clientId] = user.revision;
+    await this.write(data);
+    return buildFilePayload(user, 0);
+  }
+
+  async getRecipe(userId: string, recipeId: string): Promise<Recipe | null> {
+    const data = await this.read();
+    const user = data.users[userId];
+    if (!user) return null;
+    const stored = user.recipes[recipeId];
+    if (!stored || stored.deletedAt !== undefined) return null;
+    return toRecipe(stored);
+  }
 
   async getTaxonomy(userId: string): Promise<TaxonomyDocument> {
-    const state = await this.loadState();
-    return (
-      state.taxonomiesByUser[userId] ?? {
-        taxonomy: createDefaultTaxonomy(),
-        revision: 0,
-        updatedAt: new Date().toISOString(),
-      }
-    );
+    const data = await this.read();
+    return data.users[userId]?.taxonomy ?? emptyTaxonomy();
   }
 
-  async saveTaxonomy(
-    userId: string,
-    taxonomy: Taxonomy,
-    baseRevision?: number,
-  ): Promise<TaxonomyDocument> {
-    return this.mutate((state) => {
-      const current: TaxonomyDocument = state.taxonomiesByUser[userId] ?? {
-        taxonomy: createDefaultTaxonomy(),
-        revision: 0,
-        updatedAt: new Date().toISOString(),
-      };
-      if (baseRevision !== undefined && current.revision !== baseRevision) {
-        throw new ConflictError("The taxonomy changed on another device.");
-      }
-      const nextDocument: TaxonomyDocument = {
-        taxonomy,
-        revision: current.revision + 1,
-        updatedAt: new Date().toISOString(),
-      };
-      state.taxonomiesByUser[userId] = nextDocument;
-      this.recordChange(state, userId, "taxonomy", userId, "replace", nextDocument.revision);
-      return nextDocument;
-    });
+  async saveTaxonomy(userId: string, taxonomy: Taxonomy): Promise<TaxonomyDocument> {
+    const data = await this.read();
+    const user = this.ensureUser(data, userId);
+    const doc: TaxonomyDocument = {
+      taxonomy,
+      revision: (user.taxonomy?.revision ?? 0) + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    user.taxonomy = doc;
+    await this.write(data);
+    return doc;
+  }
+}
+
+// ── PostgresAppStore ──────────────────────────────────────────────────────────
+
+export class PostgresAppStore implements AppStore {
+  constructor(private pool: Pool) {}
+
+  async ensureSchema(): Promise<void> {
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS user_revisions (
+        user_id TEXT PRIMARY KEY,
+        current_revision BIGINT NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS recipes (
+        id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        data JSONB NOT NULL,
+        revision BIGINT NOT NULL,
+        deleted_at TIMESTAMPTZ,
+        PRIMARY KEY (id, user_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS applied_mutations (
+        client_mutation_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        PRIMARY KEY (client_mutation_id, user_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS taxonomy_documents (
+        user_id TEXT PRIMARY KEY,
+        data JSONB NOT NULL,
+        revision BIGINT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS client_cursors (
+        client_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        cursor BIGINT NOT NULL DEFAULT 0,
+        last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (client_id, user_id)
+      );
+    `);
   }
 
-  // ── Recipes ───────────────────────────────────────────────────────────
-
-  async listRecipeIndexEntries(userId: string): Promise<RecipeIndexEntry[]> {
-    const state = await this.loadState();
-    return this.getUserRecipes(state, userId)
-      .filter((recipe) => !recipe.deletedAt)
-      .map(toIndexEntry)
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-  }
-
-  async getRecipe(userId: string, recipeId: string): Promise<Recipe | undefined> {
-    const state = await this.loadState();
-    const recipe = this.getUserRecipes(state, userId).find(
-      (entry) => entry.id === recipeId && !entry.deletedAt,
-    );
-    return recipe ? { ...recipe } : undefined;
-  }
-
-  async saveRecipe(
-    userId: string,
-    recipe: Partial<Recipe> & { id: string },
-    baseRevision?: number,
-  ): Promise<Recipe> {
-    return this.mutate((state) => {
-      const recipes = this.getUserRecipes(state, userId);
-      const existing = recipes.find((entry) => entry.id === recipe.id);
-      if (existing && baseRevision !== undefined && existing.revision !== baseRevision) {
-        throw new ConflictError("This recipe changed on another device.");
-      }
-      const nextRecipe: Recipe = {
-        ...existing,
-        ...recipe,
-        id: recipe.id || randomUUID(),
-        ingredients: recipe.ingredients ?? existing?.ingredients ?? [],
-        title: recipe.title ?? existing?.title ?? "",
-        createdAt: existing?.createdAt ?? recipe.createdAt ?? new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        revision: existing ? existing.revision + 1 : 1,
-        deletedAt: undefined,
-      };
-      state.recipesByUser[userId] = recipes
-        .filter((entry) => entry.id !== nextRecipe.id)
-        .concat(nextRecipe);
-      this.recordChange(state, userId, "recipe", nextRecipe.id, "upsert", nextRecipe.revision);
-      return { ...nextRecipe };
-    });
-  }
-
-  async deleteRecipe(userId: string, recipeId: string, baseRevision?: number): Promise<void> {
-    return this.mutate((state) => {
-      const recipes = this.getUserRecipes(state, userId);
-      const existing = recipes.find((entry) => entry.id === recipeId);
-      if (!existing) {
-        throw new NotFoundError("Recipe not found.");
-      }
-      if (baseRevision !== undefined && existing.revision !== baseRevision) {
-        throw new ConflictError("This recipe changed on another device.");
-      }
-      const deletedRecipe: Recipe = {
-        ...existing,
-        revision: existing.revision + 1,
-        deletedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      state.recipesByUser[userId] = recipes
-        .filter((entry) => entry.id !== recipeId)
-        .concat(deletedRecipe);
-      this.recordChange(state, userId, "recipe", recipeId, "delete", deletedRecipe.revision);
-    });
-  }
-
-  // ── Sync ──────────────────────────────────────────────────────────────
-
-  async getSyncPayload(userId: string, cursor?: string): Promise<SyncPayload> {
-    const state = await this.loadState();
-    const numericCursor = cursor ? Number(cursor) : 0;
-    const relevantChanges = state.changes.filter(
-      (change) => change.userId === userId && change.seq > numericCursor,
-    );
-    const recipes = this.getUserRecipes(state, userId);
-
-    const latestSeq =
-      relevantChanges.length > 0
-        ? relevantChanges[relevantChanges.length - 1].seq
-        : (state.changes.filter((change) => change.userId === userId).at(-1)?.seq ?? numericCursor);
-
-    if (!cursor) {
-      const taxonomyDocument = state.taxonomiesByUser[userId];
-      return {
-        recipes: recipes.filter((recipe) => !recipe.deletedAt).map(toIndexEntry),
-        deletedIds: [],
-        taxonomy: taxonomyDocument?.taxonomy,
-        taxonomyRevision: taxonomyDocument?.revision ?? 0,
-        cursor: String(latestSeq),
-      };
-    }
-
-    const changedRecipeIds = [
-      ...new Set(
-        relevantChanges
-          .filter((change) => change.entityType === "recipe")
-          .map((change) => change.entityId),
+  private async buildSyncPayload(userId: string, cursorRev: number): Promise<SyncPayload> {
+    const [recipesResult, deletedResult, revResult] = await Promise.all([
+      this.pool.query<{ data: Recipe }>(
+        "SELECT data FROM recipes WHERE user_id = $1 AND revision > $2 AND deleted_at IS NULL",
+        [userId, cursorRev],
       ),
-    ];
-    const changedRecipes = recipes
-      .filter((recipe) => changedRecipeIds.includes(recipe.id) && !recipe.deletedAt)
-      .map(toIndexEntry);
-    const deletedIds = changedRecipeIds.filter((recipeId) =>
-      recipes.some((recipe) => recipe.id === recipeId && Boolean(recipe.deletedAt)),
-    );
-
-    const taxonomyChange = relevantChanges
-      .filter((change) => change.entityType === "taxonomy")
-      .at(-1);
-    const taxonomyDocument = taxonomyChange ? state.taxonomiesByUser[userId] : undefined;
+      this.pool.query<{ id: string }>(
+        "SELECT id FROM recipes WHERE user_id = $1 AND revision > $2 AND deleted_at IS NOT NULL",
+        [userId, cursorRev],
+      ),
+      this.pool.query<{ rev: string }>(
+        "SELECT COALESCE(current_revision, 0)::text AS rev FROM user_revisions WHERE user_id = $1",
+        [userId],
+      ),
+    ]);
 
     return {
-      recipes: changedRecipes,
-      deletedIds,
-      taxonomy: taxonomyDocument?.taxonomy,
-      taxonomyRevision: taxonomyDocument?.revision,
-      cursor: String(latestSeq),
+      recipes: recipesResult.rows.map((r) => r.data),
+      deletedIds: deletedResult.rows.map((r) => r.id),
+      cursor: revResult.rows[0]?.rev ?? "0",
     };
   }
 
-  // ── Mutation deduplication ────────────────────────────────────────────
+  async getSyncPayload(userId: string, clientId: string, cursor?: string): Promise<SyncPayload> {
+    const cursorRev = cursor !== undefined ? parseInt(cursor, 10) : 0;
 
-  async hasProcessedMutation(userId: string, clientMutationId: string): Promise<boolean> {
-    const state = await this.loadState();
-    return state.processedMutations[userId]?.includes(clientMutationId) ?? false;
+    const [payload] = await Promise.all([
+      this.buildSyncPayload(userId, cursorRev),
+      this.pool.query(
+        `INSERT INTO client_cursors (client_id, user_id, cursor, last_seen_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (client_id, user_id) DO UPDATE SET cursor = $3, last_seen_at = NOW()`,
+        [clientId, userId, cursorRev],
+      ),
+    ]);
+
+    return payload;
   }
 
-  async markMutationProcessed(userId: string, clientMutationId: string): Promise<void> {
-    return this.mutate((state) => {
-      state.processedMutations[userId] ??= [];
-      if (!state.processedMutations[userId].includes(clientMutationId)) {
-        state.processedMutations[userId].push(clientMutationId);
-      }
-    });
-  }
+  async applyMutations(userId: string, clientId: string, mutations: Mutation[]): Promise<SyncPayload> {
+    const client: PoolClient = await this.pool.connect();
+    let finalRevision = 0;
+    try {
+      await client.query("BEGIN");
 
-  async applyMutations(userId: string, mutations: Mutation[]): Promise<SyncPayload> {
-    for (const mutation of mutations) {
-      if (await this.hasProcessedMutation(userId, mutation.clientMutationId)) {
-        continue;
+      for (const mutation of mutations) {
+        const existing = await client.query<{ client_mutation_id: string }>(
+          "SELECT client_mutation_id FROM applied_mutations WHERE client_mutation_id = $1 AND user_id = $2",
+          [mutation.clientMutationId, userId],
+        );
+        if ((existing.rowCount ?? 0) > 0) continue;
+
+        const revResult = await client.query<{ current_revision: string }>(
+          `INSERT INTO user_revisions (user_id, current_revision) VALUES ($1, 1)
+           ON CONFLICT (user_id) DO UPDATE SET current_revision = user_revisions.current_revision + 1
+           RETURNING current_revision`,
+          [userId],
+        );
+        const revision = parseInt(revResult.rows[0].current_revision, 10);
+        finalRevision = revision;
+        const now = new Date().toISOString();
+
+        if (mutation.type === "upsertRecipe") {
+          const prevResult = await client.query<{ created_at: string }>(
+            "SELECT data->>'createdAt' AS created_at FROM recipes WHERE id = $1 AND user_id = $2",
+            [mutation.recipe.id, userId],
+          );
+          const createdAt = prevResult.rows[0]?.created_at ?? now;
+          const data: Recipe = {
+            ...mutation.recipe,
+            createdAt,
+            updatedAt: now,
+            revision,
+          };
+          await client.query(
+            `INSERT INTO recipes (id, user_id, data, revision, deleted_at)
+             VALUES ($1, $2, $3, $4, NULL)
+             ON CONFLICT (id, user_id) DO UPDATE SET data = $3, revision = $4, deleted_at = NULL`,
+            [mutation.recipe.id, userId, JSON.stringify(data), revision],
+          );
+        } else if (mutation.type === "deleteRecipe") {
+          await client.query(
+            "UPDATE recipes SET deleted_at = $1, revision = $2 WHERE id = $3 AND user_id = $4 AND deleted_at IS NULL",
+            [now, revision, mutation.recipeId, userId],
+          );
+        }
+
+        await client.query(
+          "INSERT INTO applied_mutations (client_mutation_id, user_id) VALUES ($1, $2)",
+          [mutation.clientMutationId, userId],
+        );
       }
-      if (mutation.type === "upsertRecipe") {
-        await this.saveRecipe(userId, mutation.recipe, mutation.baseRevision);
-      } else if (mutation.type === "deleteRecipe") {
-        await this.deleteRecipe(userId, mutation.recipeId, mutation.baseRevision);
-      } else {
-        await this.saveTaxonomy(userId, mutation.taxonomy, mutation.baseRevision);
+
+      if (finalRevision === 0) {
+        const revResult = await client.query<{ current_revision: string }>(
+          "SELECT COALESCE(current_revision, 0)::text AS current_revision FROM user_revisions WHERE user_id = $1",
+          [userId],
+        );
+        finalRevision = parseInt(revResult.rows[0]?.current_revision ?? "0", 10);
       }
-      await this.markMutationProcessed(userId, mutation.clientMutationId);
+
+      await client.query(
+        `INSERT INTO client_cursors (client_id, user_id, cursor, last_seen_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (client_id, user_id) DO UPDATE SET cursor = $3, last_seen_at = NOW()`,
+        [clientId, userId, finalRevision],
+      );
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
-    return this.getSyncPayload(userId);
-  }
-}
 
-export interface AppStore {
-  getTaxonomy(userId: string): Promise<TaxonomyDocument>;
-  getSyncPayload(userId: string, cursor?: string): Promise<SyncPayload>;
-  applyMutations(userId: string, mutations: Mutation[]): Promise<SyncPayload>;
-  getRecipe(userId: string, recipeId: string): Promise<Recipe | undefined>;
-  saveTaxonomy(
-    userId: string,
-    taxonomy: Taxonomy,
-    baseRevision?: number,
-  ): Promise<TaxonomyDocument>;
+    return this.buildSyncPayload(userId, 0);
+  }
+
+  async getRecipe(userId: string, recipeId: string): Promise<Recipe | null> {
+    const result = await this.pool.query<{ data: Recipe }>(
+      "SELECT data FROM recipes WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+      [recipeId, userId],
+    );
+    return (result.rowCount ?? 0) > 0 ? result.rows[0].data : null;
+  }
+
+  async getTaxonomy(userId: string): Promise<TaxonomyDocument> {
+    const result = await this.pool.query<{ data: Taxonomy; revision: number; updated_at: string }>(
+      "SELECT data, revision, updated_at FROM taxonomy_documents WHERE user_id = $1",
+      [userId],
+    );
+    if ((result.rowCount ?? 0) === 0) {
+      return emptyTaxonomy();
+    }
+    const row = result.rows[0];
+    return { taxonomy: row.data, revision: row.revision, updatedAt: row.updated_at };
+  }
+
+  async saveTaxonomy(userId: string, taxonomy: Taxonomy): Promise<TaxonomyDocument> {
+    const now = new Date().toISOString();
+    const result = await this.pool.query<{ revision: number; updated_at: string }>(
+      `INSERT INTO taxonomy_documents (user_id, data, revision, updated_at) VALUES ($1, $2, 1, $3)
+       ON CONFLICT (user_id) DO UPDATE
+         SET data = $2, revision = taxonomy_documents.revision + 1, updated_at = $3
+       RETURNING revision, updated_at`,
+      [userId, JSON.stringify(taxonomy), now],
+    );
+    return { taxonomy, revision: result.rows[0].revision, updatedAt: result.rows[0].updated_at };
+  }
 }

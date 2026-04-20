@@ -96,17 +96,39 @@ describe("createApp", () => {
       .expect(401, { error: "Missing Bearer token." });
   });
 
+  it("rejects sync endpoints without X-Client-Id", async () => {
+    const { store } = createStoreStub();
+    const app = createApp({ store, verifyToken, fetchImpl });
+
+    await request(app)
+      .get("/api/bootstrap")
+      .set("Authorization", "Bearer good-token")
+      .expect(400, { error: "X-Client-Id header is required." });
+
+    await request(app)
+      .get("/api/sync/changes")
+      .set("Authorization", "Bearer good-token")
+      .expect(400, { error: "X-Client-Id header is required." });
+
+    await request(app)
+      .post("/api/sync/push")
+      .set("Authorization", "Bearer good-token")
+      .send({ mutations: [] })
+      .expect(400, { error: "X-Client-Id header is required." });
+  });
+
   it("returns bootstrap payloads for authenticated requests", async () => {
     const { store, getSyncPayload, getTaxonomy, taxonomyDocument, syncPayload } = createStoreStub();
 
     const response = await request(createApp({ store, verifyToken, fetchImpl }))
       .get("/api/bootstrap")
       .set("Authorization", "Bearer good-token")
+      .set("X-Client-Id", "device-abc")
       .expect(200);
 
     expect(verifyToken).toHaveBeenCalledWith("good-token");
     expect(getTaxonomy).toHaveBeenCalledWith("user-123");
-    expect(getSyncPayload).toHaveBeenCalledWith("user-123");
+    expect(getSyncPayload).toHaveBeenCalledWith("user-123", "device-abc");
     expect(response.body).toEqual({
       recipes: syncPayload.recipes,
       deletedIds: syncPayload.deletedIds,
@@ -122,6 +144,7 @@ describe("createApp", () => {
     await request(createApp({ store, verifyToken, fetchImpl }))
       .get("/api/sync/changes?cursor=not-a-number")
       .set("Authorization", "Bearer good-token")
+      .set("X-Client-Id", "device-abc")
       .expect(400, { error: "cursor must be a numeric string." });
 
     expect(getSyncPayload).not.toHaveBeenCalled();
@@ -133,6 +156,7 @@ describe("createApp", () => {
     await request(createApp({ store, verifyToken, fetchImpl }))
       .post("/api/sync/push")
       .set("Authorization", "Bearer good-token")
+      .set("X-Client-Id", "device-abc")
       .send({ mutations: [{ type: "upsertRecipe", clientMutationId: "m-1", recipe: {} }] })
       .expect(400, { error: "Recipe id is required." });
 

@@ -12,12 +12,28 @@ import {
 import { useStatusStore, type StatusTone } from "../status/useStatusStore";
 import { getRecipeStore } from "./recipeStore";
 
+const LOCAL_IDS_KEY = "saucer:local-recipe-ids";
+
+function loadLocalRecipeIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LOCAL_IDS_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveLocalRecipeIds(ids: Set<string>): void {
+  localStorage.setItem(LOCAL_IDS_KEY, JSON.stringify([...ids]));
+}
+
 function createInitialState() {
   return {
     recipes: [] as Recipe[],
     taxonomy: ensureDefaultTaxonomy(),
     loading: true,
     initialized: false,
+    localRecipeIds: loadLocalRecipeIds(),
   };
 }
 
@@ -31,7 +47,9 @@ type SaucerStoreState = ReturnType<typeof createInitialState> & {
     message: string,
     tone?: StatusTone,
   ) => Promise<void>;
-  deleteRecipe: (recipeId: string) => Promise<void>;
+  markRecipeAsLocal: (id: string) => void;
+  confirmRecipes: (serverIds: Set<string>) => void;
+  deleteRecipe: (recipeId: string) => Promise<boolean>;
   updateRecipeRating: (recipeId: string, rating: number) => Promise<void>;
   saveCategory: (name: string, description: string) => Promise<void>;
   saveTag: (categoryId: string, name: string) => Promise<void>;
@@ -95,6 +113,7 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
       }
     }
     set({ recipes: merged });
+    get().confirmRecipes(new Set(updatedRecipes.map((r) => r.id)));
   },
   replaceAll: async (recipes, taxonomy, message, tone = "success") => {
     const snapshot = await getRecipeStore().replaceAll(recipes, taxonomy);
@@ -106,7 +125,35 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     });
     useStatusStore.getState().updateStatus(message, tone);
   },
+  markRecipeAsLocal: (id) => {
+    const next = new Set(get().localRecipeIds);
+    next.add(id);
+    saveLocalRecipeIds(next);
+    set({ localRecipeIds: next });
+  },
+  confirmRecipes: (serverIds) => {
+    const current = get().localRecipeIds;
+    const next = new Set([...current].filter((id) => !serverIds.has(id)));
+    if (next.size !== current.size) {
+      saveLocalRecipeIds(next);
+      set({ localRecipeIds: next });
+    }
+  },
   deleteRecipe: async (recipeId) => {
+    const { localRecipeIds } = get();
+    const { useSyncStore } = await import("../sync/useSyncStore");
+    const connected = useSyncStore.getState().connected;
+
+    if (!connected && !localRecipeIds.has(recipeId)) {
+      useStatusStore
+        .getState()
+        .updateStatus(
+          "Cannot delete a synced recipe while offline. Connect to the server first.",
+          "error",
+        );
+      return false;
+    }
+
     const snapshot = await getRecipeStore().deleteRecipe(recipeId);
     set({
       recipes: snapshot.recipes,
@@ -115,13 +162,13 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
       initialized: true,
     });
     useStatusStore.getState().updateStatus("Recipe deleted.", "success");
-    const { useSyncStore } = await import("../sync/useSyncStore");
     void useSyncStore.getState().pushMutation({
       type: "deleteRecipe",
       clientMutationId: crypto.randomUUID(),
       recipeId,
       revision: 0,
     });
+    return true;
   },
   updateRecipeRating: async (recipeId, rating) => {
     const { recipes, taxonomy, replaceAll } = get();

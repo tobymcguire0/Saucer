@@ -56,10 +56,44 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     const { client } = get();
     if (!client) return;
     try {
+      const { recipes: currentRecipes, localRecipeIds } = useSaucerStore.getState();
+      const localOnlyRecipes = currentRecipes.filter((r) => localRecipeIds.has(r.id));
+
       const payload = await client.bootstrap();
-      const recipes = payload.recipes.map(toClientRecipe);
-      const taxonomy = toClientTaxonomy(payload.taxonomy);
-      await useSaucerStore.getState().bootstrapFromServer(recipes, taxonomy);
+      const serverRecipes = payload.recipes.map(toClientRecipe);
+      const serverTaxonomy = toClientTaxonomy(payload.taxonomy);
+
+      // Merge local-only taxonomy items the server doesn't have
+      const { taxonomy: localTaxonomy } = useSaucerStore.getState();
+      const serverCategoryIds = new Set(serverTaxonomy.categories.map((c) => c.id));
+      const serverTagIds = new Set(serverTaxonomy.tags.map((t) => t.id));
+      const mergedTaxonomy: Taxonomy = {
+        categories: [
+          ...serverTaxonomy.categories,
+          ...localTaxonomy.categories.filter((c) => !serverCategoryIds.has(c.id)),
+        ],
+        tags: [
+          ...serverTaxonomy.tags,
+          ...localTaxonomy.tags.filter((t) => !serverTagIds.has(t.id)),
+        ],
+      };
+
+      const serverIdSet = new Set(serverRecipes.map((r) => r.id));
+      const newLocals = localOnlyRecipes.filter((r) => !serverIdSet.has(r.id));
+
+      await useSaucerStore.getState().bootstrapFromServer([...serverRecipes, ...newLocals], mergedTaxonomy);
+
+      useSaucerStore.getState().confirmRecipes(serverIdSet);
+
+      for (const recipe of newLocals) {
+        const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = recipe;
+        void get().pushMutation({
+          type: "upsertRecipe",
+          clientMutationId: crypto.randomUUID(),
+          recipe: recipeInput,
+        });
+      }
+
       set({ connected: true, cursor: payload.cursor });
     } catch {
       set({ connected: false });

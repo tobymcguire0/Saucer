@@ -11,7 +11,7 @@ type RecipeCardProps = {
   tagLookup: Map<string, Taxonomy["tags"][number]>;
   categoryLookup: Map<string, Taxonomy["categories"][number]>;
   onEdit: (recipe: Recipe) => void;
-  onDelete: (recipeId: string) => Promise<void>;
+  onDelete: (recipeId: string) => Promise<boolean>;
   onOpenDetail: (recipeId: string) => void;
   onRate: (recipeId: string, rating: number) => Promise<void>;
 };
@@ -26,6 +26,7 @@ function RecipeCard({
   onRate,
 }: RecipeCardProps) {
   const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const [shaking, setShaking] = useState(false);
   const sortedTagIds = sortTagIdsForPreview(recipe.tagIds, tagLookup, categoryLookup);
   const hasOverflow = sortedTagIds.length > previewTagLimit;
   const previewTagIds = hasOverflow
@@ -114,15 +115,20 @@ function RecipeCard({
           </button>
           <button
             type="button"
-            className={
+            className={cn(
               deleteConfirming
                 ? "btn-primary border-accent-55 bg-accent-50 hover:border-accent-60 hover:bg-accent-55 active:bg-accent-60"
-                : "btn-secondary"
-            }
-            onClick={(event) => {
+                : "btn-secondary",
+              shaking && "animate-shake",
+            )}
+            onClick={async (event) => {
               event.stopPropagation();
               if (deleteConfirming) {
-                void onDelete(recipe.id);
+                const deleted = await onDelete(recipe.id);
+                if (!deleted) {
+                  setShaking(true);
+                  setTimeout(() => setShaking(false), 500);
+                }
                 return;
               }
               setDeleteConfirming(true);

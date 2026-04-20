@@ -16,7 +16,20 @@ export function useSyncEffect() {
     if (!auth.isAuthenticated) return;
     const client = new ApiClient(() => tokenRef.current);
     useSyncStore.getState().setClient(client);
-    void useSyncStore.getState().bootstrap();
+
+    // Try to bootstrap / connect every 5 seconds until we connect and are bootstrapped
+    let id: ReturnType<typeof setInterval>;
+    const bootstrap = () => {
+      if (useSyncStore.getState().connected) {
+        clearInterval(id);
+        return;
+      }
+      void useSyncStore.getState().bootstrap();
+    };
+    bootstrap(); // try immediately, don't wait 5s first
+    id = setInterval(bootstrap, 5_000);
+    return () => clearInterval(id);
+    
   }, [auth.isAuthenticated]);
 
   useEffect(() => {

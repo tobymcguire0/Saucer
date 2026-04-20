@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "../../lib/cn";
 import { useRecipeDetailViewModel } from "../../features/browse/useRecipeDetailViewModel";
 import StarRating from "../StarRating";
@@ -8,6 +8,16 @@ function RecipeDetailWorkspace() {
   const { recipe, closeRecipeDetail, deleteRecipe, updateRecipeRating, openEditEditor, tagLookup, categoryLookup } =
     useRecipeDetailViewModel();
   const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const [shaking, setShaking] = useState(false);
+
+  const handleDelete = useCallback(async () => {
+    if (!recipe) return;
+    const deleted = await deleteRecipe(recipe.id);
+    if (!deleted) {
+      setShaking(true);
+      setTimeout(() => setShaking(false), 500);
+    }
+  }, [recipe, deleteRecipe]);
   const sortedTagIds = recipe
     ? sortTagIdsForPreview(recipe.tagIds, tagLookup, categoryLookup)
     : [];
@@ -79,10 +89,11 @@ function RecipeDetailWorkspace() {
               deleteConfirming
                 ? "btn-primary border-accent-55 bg-accent-50 hover:border-accent-60 hover:bg-accent-55 active:bg-accent-60"
                 : "btn-secondary",
+              shaking && "animate-shake",
             )}
             onClick={() => {
               if (deleteConfirming) {
-                void deleteRecipe(recipe.id);
+                void handleDelete();
                 return;
               }
               setDeleteConfirming(true);

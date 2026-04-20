@@ -269,6 +269,10 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       ? recipes.map((recipe) => (recipe.id === nextRecipe.id ? nextRecipe : recipe))
       : [nextRecipe, ...recipes];
 
+    if (!existingRecipe) {
+      useSaucerStore.getState().markRecipeAsLocal(nextRecipe.id);
+    }
+
     await replaceAll(
       nextRecipes,
       taxonomy,

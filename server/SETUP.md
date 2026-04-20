@@ -4,8 +4,9 @@ The sync server runs as three Docker containers managed by Docker Compose: a Pos
 
 ## Prerequisites
 
-- A Linux server (Ubuntu/Debian recommended)
-- A domain with an A record pointing to your server's IP — `api.tobymcguire.net` → `<your-server-ip>`
+- A Mac or Linux machine that stays on and is connected to the internet
+- A domain managed by Cloudflare (tobymcguire.net)
+- A Cloudflare API token (created below)
 - Docker and Docker Compose installed
 - AWS Cognito user pool and app client already configured
 - AWS S3 bucket for hero image storage
@@ -32,6 +33,131 @@ pip3 install certbot-dns-cloudflare
 ```
 
 **Windows:** Run these commands inside WSL (Windows Subsystem for Linux), then follow the Linux instructions above.
+
+---
+
+## DNS and Router Setup
+
+Before starting the server, the outside world needs a way to find it. Traffic flows like this:
+
+```
+Internet → Cloudflare (api.tobymcguire.net) → your router → your machine → Docker → nginx → Node server
+```
+
+### 1. Find your public IP
+
+This is the IP address your internet provider assigned to your router — it's what the outside world sees.
+
+```bash
+curl https://api.ipify.org
+```
+
+> **Note:** Home internet connections usually have a dynamic public IP that changes periodically. If yours does, you'll need to update the DNS A record whenever it changes, or look into a DDNS (Dynamic DNS) service to automate it.
+
+### 2. Add a DNS A record in Cloudflare
+
+1. Log in to the [Cloudflare dashboard](https://dash.cloudflare.com) and select **tobymcguire.net**
+2. Go to **DNS → Records → Add record**
+3. Fill in:
+   - **Type:** A
+   - **Name:** `api`
+   - **IPv4 address:** your public IP from step 1
+   - **Proxy status:** Proxied (orange cloud on) — keep this enabled
+   - **TTL:** Auto
+4. Click **Save**
+
+The full hostname `api.tobymcguire.net` will start resolving within a few minutes.
+
+### 3. Set Cloudflare SSL mode to Full
+
+Because Cloudflare proxies traffic (orange cloud), it makes its own HTTPS connection to your server. The SSL mode controls how it does that.
+
+1. In the Cloudflare dashboard, go to **SSL/TLS → Overview**
+2. Set the mode to **Full**
+
+| Mode | What it does | Result |
+|------|-------------|--------|
+| Off | No HTTPS at all | Broken |
+| Flexible | Cloudflare → your server over HTTP | nginx redirects back to HTTPS → infinite loop → 522 |
+| **Full** | Cloudflare → your server over HTTPS | **Correct** |
+| Full (strict) | Same as Full, validates cert chain | Also works |
+
+### 4. Set up port forwarding on your router
+
+Your router receives all inbound internet traffic. By default it blocks everything — you need to tell it to forward ports 80 and 443 to the machine running Docker.
+
+**Find your machine's local IP:**
+
+```bash
+# macOS — Wi-Fi
+ipconfig getifaddr en0
+
+# macOS — Ethernet
+ipconfig getifaddr en1
+
+# Linux
+hostname -I | awk '{print $1}'
+```
+
+It will look something like `192.168.1.42`. This is the address you'll forward traffic to.
+
+**Add port forwarding rules in your router:**
+
+Every router is different, but the steps are generally:
+
+1. Open a browser and go to your router's admin panel. Common addresses:
+   - `http://192.168.1.1`
+   - `http://192.168.0.1`
+   - `http://10.0.0.1`
+   - Or check the label on the back of your router
+2. Log in (credentials are often on the router label too)
+3. Find the **Port Forwarding** section. It may be listed under:
+   - NAT → Port Forwarding
+   - Advanced → Virtual Servers
+   - Firewall → Port Forwarding
+4. Add two rules:
+
+   | Name | External Port | Internal IP | Internal Port | Protocol |
+   |------|-------------|-------------|---------------|----------|
+   | saucer-http | 80 | 192.168.1.42 | 80 | TCP |
+   | saucer-https | 443 | 192.168.1.42 | 443 | TCP |
+
+   Replace `192.168.1.42` with your actual local IP from above.
+
+5. Save and apply.
+
+> **Tip:** Assign your machine a static local IP in the router's DHCP settings so the forwarding rules don't break if the local IP changes after a reboot.
+
+### 5. Allow inbound connections through the macOS firewall
+
+macOS has a built-in firewall that may block incoming connections to Docker.
+
+**Via System Settings:**
+1. Open **System Settings → Network → Firewall**
+2. Make sure the firewall is not set to **Block all incoming connections**
+3. Click **Options** and confirm Docker is in the list and set to **Allow incoming connections**
+
+**Or check via terminal:**
+```bash
+/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
+```
+
+If it says `enabled`, add Docker explicitly:
+```bash
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add /Applications/Docker.app/Contents/MacOS/Docker
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp /Applications/Docker.app/Contents/MacOS/Docker
+```
+
+### 6. Verify connectivity before continuing
+
+Once DNS has propagated and port forwarding is set up, confirm the path is open end-to-end. Run this from a different network (e.g. your phone on cellular, not your home Wi-Fi):
+
+```bash
+curl https://api.tobymcguire.net/api/health
+# Expected: {"status":"ok"}
+```
+
+If you get a 522, the connection is timing out — Cloudflare can reach the DNS record but not your machine. Double-check port forwarding and the firewall. If you get a 525 or SSL error, the SSL mode is wrong — go back to step 3.
 
 ---
 
@@ -322,3 +448,14 @@ certbot renew --dry-run
 If the token expired, create a new one in the Cloudflare dashboard and update the credentials file.
 
 **certbot "unauthorized" error with IP starting with 2606:47xx** — your domain is proxied through Cloudflare and you used `--standalone` instead of `--dns-cloudflare`. Re-run using the DNS challenge commands in step 3.
+
+**Cloudflare 522 error** — Cloudflare can resolve the DNS but can't reach your machine. Work through this checklist:
+1. Confirm the server is healthy locally: `curl http://localhost/api/health`
+2. Confirm your public IP matches the DNS A record: `curl https://api.ipify.org` then check Cloudflare DNS dashboard
+3. Confirm port forwarding is set up on your router for ports 80 and 443 pointing to your machine's local IP
+4. Confirm macOS firewall is not blocking Docker (see DNS and Router Setup → step 5)
+5. Test from a different network (phone on cellular) to rule out your own router hairpinning
+
+**Cloudflare 525 or SSL handshake error** — the SSL/TLS mode in Cloudflare is set to Flexible instead of Full. Go to **SSL/TLS → Overview** in the Cloudflare dashboard and set it to **Full**.
+
+**Server is reachable from home Wi-Fi but not from outside** — your router may not support NAT hairpinning (accessing your own public IP from inside your network). Always test public reachability from a different network, such as a phone on cellular.

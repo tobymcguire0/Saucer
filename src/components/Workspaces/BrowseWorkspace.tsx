@@ -16,14 +16,14 @@ function BrowseWorkspace() {
 
   if (groupByCategoryId) {
     return (
-      <div className="section-stack">
+      <div className="flex flex-col gap-5">
         {groupedRecipes.map((section) => (
           <section key={section.id}>
-            <div className="section-heading">
-              <h3>{section.label}</h3>
-              <span>{section.recipes.length} recipes</span>
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <h3 className="text-xl font-semibold text-text-60">{section.label}</h3>
+              <span className="text-sm font-medium text-text-35">{section.recipes.length} recipes</span>
             </div>
-            <div className="recipe-grid">
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
               {section.recipes.map((recipe) => (
                 <RecipeCard
                   key={recipe.id}
@@ -44,7 +44,7 @@ function BrowseWorkspace() {
   }
 
   return (
-    <div className="recipe-grid">
+    <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
       {visibleRecipes.map((recipe) => (
         <RecipeCard
           key={recipe.id}

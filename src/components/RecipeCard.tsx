@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cn } from "../lib/cn";
 import type { Recipe, Taxonomy } from "../lib/models";
 import { sortTagIdsForPreview } from "./recipeTagPreview";
 import StarRating from "./StarRating";
@@ -34,7 +35,12 @@ function RecipeCard({
 
   return (
     <article
-      className="recipe-card recipe-card-clickable"
+      className={cn(
+        "group flex min-h-full cursor-pointer flex-col overflow-hidden rounded-[var(--radius-card)] border bg-background-0 shadow-[var(--shadow-panel)] transition duration-150",
+        "border-panel-15 hover:-translate-y-0.5 hover:border-primary-25 hover:shadow-[var(--shadow-floating)]",
+        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-10",
+        deleteConfirming && "border-accent-30",
+      )}
       data-testid={`recipe-card-${recipe.id}`}
       role="button"
       tabIndex={0}
@@ -49,15 +55,17 @@ function RecipeCard({
       onMouseLeave={() => setDeleteConfirming(false)}
     >
       {recipe.heroImage ? (
-        <img className="recipe-image" src={recipe.heroImage} alt={recipe.title} />
+        <img className="h-48 w-full bg-panel-10 object-cover" src={recipe.heroImage} alt={recipe.title} />
       ) : (
-        <div className="recipe-image recipe-image-placeholder">No image</div>
+        <div className="grid h-48 w-full place-items-center bg-panel-5 text-sm font-medium text-text-35">
+          No image
+        </div>
       )}
-      <div className="recipe-card-body recipe-card-preview">
-        <div className="section-heading">
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h3>{recipe.title}</h3>
-            <p className="muted">
+            <h3 className="text-xl font-semibold text-text-60">{recipe.title}</h3>
+            <p className="mt-1 text-sm text-text-35">
               {recipe.cuisine || "Unknown cuisine"} · {recipe.mealType || "Any meal"} ·{" "}
               {recipe.servings || "Servings not set"}
             </p>
@@ -73,15 +81,15 @@ function RecipeCard({
             }}
           />
         </div>
-        <p className="recipe-card-summary">{recipe.summary}</p>
+        <p className="line-clamp-3 text-sm leading-6 text-text-45">{recipe.summary}</p>
         <div
-          className={
-            remainingTagCount > 0
-              ? "recipe-card-tag-area recipe-card-tag-area-overflow"
-              : "recipe-card-tag-area"
-          }
+          className={cn(
+            "relative mt-auto min-h-0",
+            remainingTagCount > 0 &&
+              "after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-4 after:bg-gradient-to-b after:from-transparent after:to-background-0",
+          )}
         >
-          <div className="chip-wrap recipe-card-tags">
+          <div className="flex max-h-[4.75rem] flex-wrap content-start gap-2 overflow-hidden pr-1">
             {previewTagIds.map((tagId) => (
               <span key={tagId} className="chip chip-static">
                 {tagLookup.get(tagId)?.name ?? tagId}
@@ -92,9 +100,10 @@ function RecipeCard({
             ) : null}
           </div>
         </div>
-        <div className="button-row recipe-card-actions">
+        <div className="relative z-10 flex flex-wrap gap-3 pt-2">
           <button
             type="button"
+            className="btn-primary"
             onClick={(event) => {
               event.stopPropagation();
               setDeleteConfirming(false);
@@ -105,7 +114,11 @@ function RecipeCard({
           </button>
           <button
             type="button"
-            className={deleteConfirming ? "" : "secondary"}
+            className={
+              deleteConfirming
+                ? "btn-primary border-accent-55 bg-accent-50 hover:border-accent-60 hover:bg-accent-55 active:bg-accent-60"
+                : "btn-secondary"
+            }
             onClick={(event) => {
               event.stopPropagation();
               if (deleteConfirming) {

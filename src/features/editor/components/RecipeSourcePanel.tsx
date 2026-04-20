@@ -1,3 +1,4 @@
+import { cn } from "../../../lib/cn";
 import type { RecipeDraft } from "../../../lib/models";
 import { sourceTypes } from "../../../lib/models";
 
@@ -25,36 +26,48 @@ function RecipeSourcePanel({
   importFromFile,
 }: RecipeSourcePanelProps) {
   return (
-    <section className="panel source-panel">
-      <div className="section-heading">
-        <h3>Source Type</h3>
-        {draft.sourceType !== "manual" ? (
-          <span className="muted">Import first to reveal the full recipe form.</span>
-        ) : (
-          <span className="muted">Manual entry shows the full form immediately.</span>
-        )}
+    <section className="rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <h3 className="text-xl font-semibold text-text-60">Source Type</h3>
+        <span className="max-w-md text-sm text-text-35">
+          {draft.sourceType !== "manual"
+            ? "Import first to reveal the full recipe form."
+            : "Manual entry shows the full form immediately."}
+        </span>
       </div>
-      <div className="upload-grid">
-        {sourceTypes.map((sourceType) => (
-          <button
-            key={sourceType}
-            type="button"
-            className={draft.sourceType === sourceType ? "chip chip-active" : "chip"}
-            onClick={() => selectSourceType(sourceType)}
-          >
-            {sourceType}
-          </button>
-        ))}
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        {sourceTypes.map((sourceType) => {
+          const selected = draft.sourceType === sourceType;
+
+          return (
+            <button
+              key={sourceType}
+              type="button"
+              className={selected ? "chip chip-active" : "chip"}
+              aria-pressed={selected}
+              onClick={() => selectSourceType(sourceType)}
+            >
+              {sourceType}
+            </button>
+          );
+        })}
       </div>
 
       {showImportControls ? (
         <div
-          className={`upload_content${uploadErrorActive ? " upload_content-error" : ""}`}
+          className={cn(
+            "mt-4 rounded-[var(--radius-card)] border p-4 transition-colors",
+            uploadErrorActive
+              ? "border-accent-35 bg-accent-5 shadow-[0_0_0_1px_color-mix(in_srgb,var(--color-accent-25)_55%,transparent)]"
+              : "border-panel-15 bg-background-0",
+          )}
           data-testid="upload-content"
+          data-upload-error={uploadErrorActive}
         >
           {draft.sourceType === "website" ? (
-            <div className="inline-form">
+            <div className="flex flex-col gap-3 md:flex-row">
               <input
+                className="field-input"
                 value={draft.sourceRef}
                 onChange={(event) => {
                   clearUploadError();
@@ -62,7 +75,12 @@ function RecipeSourcePanel({
                 }}
                 placeholder="https://example.com/recipe"
               />
-              <button type="button" onClick={() => void importFromWebsite()} disabled={isImporting}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void importFromWebsite()}
+                disabled={isImporting}
+              >
                 {isImporting ? "Importing..." : "Import"}
               </button>
             </div>
@@ -70,8 +88,11 @@ function RecipeSourcePanel({
 
           {draft.sourceType === "photo" || draft.sourceType === "text" ? (
             <label className="field">
-              <span>{draft.sourceType === "photo" ? "Photo file" : "Text file"}</span>
+              <span className="text-sm font-medium text-text-50">
+                {draft.sourceType === "photo" ? "Photo file" : "Text file"}
+              </span>
               <input
+                className="field-input"
                 type="file"
                 accept={draft.sourceType === "photo" ? "image/*" : ".txt,.md,.rtf"}
                 onChange={(event) => {

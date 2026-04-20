@@ -1,13 +1,11 @@
 import RandomDishPanel from "../features/browse/components/RandomDishPanel";
 import SearchFilterPanel from "../features/browse/components/SearchFilterPanel";
 import SidebarHeader from "../features/browse/components/SidebarHeader";
-import SidebarNavigation from "../features/browse/components/SidebarNavigation";
 import { useAppSidebarViewModel } from "../features/app/useAppSidebarViewModel";
+import ThemePalettePanel from "../features/theme/components/ThemePalettePanel";
 
 function AppSidebar() {
   const {
-    activeView,
-    setActiveWorkspace,
     username,
     onLogout,
     onUploadRecipe,
@@ -28,18 +26,18 @@ function AppSidebar() {
     setSidebarTagInput,
   } = useAppSidebarViewModel();
 
-  return (
-    <aside className="sidebar">
-      <SidebarHeader
-        username={username}
-        onLogout={onLogout}
-        onUploadRecipe={onUploadRecipe}
-      />
-      <SidebarNavigation activeView={activeView} setActiveWorkspace={setActiveWorkspace} />
-      <RandomDishPanel
-        randomIngredientInput={randomIngredientInput}
-        updateRandomIngredientSearch={updateRandomIngredientSearch}
-        chooseRandomRecipe={chooseRandomRecipe}
+    return (
+      <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-[30rem] xl:max-w-[30rem]">
+        <SidebarHeader
+          username={username}
+          onLogout={onLogout}
+          onUploadRecipe={onUploadRecipe}
+        />
+        
+        <RandomDishPanel
+          randomIngredientInput={randomIngredientInput}
+          updateRandomIngredientSearch={updateRandomIngredientSearch}
+          chooseRandomRecipe={chooseRandomRecipe}
       />
       <SearchFilterPanel
         query={query}
@@ -53,11 +51,14 @@ function AppSidebar() {
         updateSortBy={updateSortBy}
         updateGroupByCategory={updateGroupByCategory}
         setCategoryInput={(_scope, _categoryId, value) => setSidebarTagInput(value)}
-        toggleFilterTag={toggleFilterTag}
-        sidebarTagSearchKey="__all__"
-      />
-    </aside>
-  );
-}
+          toggleFilterTag={toggleFilterTag}
+          sidebarTagSearchKey="__all__"
+        />
+        <div className="xl:mt-auto">
+          <ThemePalettePanel />
+        </div>
+      </aside>
+    );
+  }
 
 export default AppSidebar;

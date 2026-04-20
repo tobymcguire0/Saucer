@@ -23,10 +23,10 @@ function RecipeTagAssignmentPanel({
   createDraftTag,
 }: RecipeTagAssignmentPanelProps) {
   return (
-    <section className="panel">
-      <div className="section-heading">
-        <h3>Edit assigned tags</h3>
-        <span>{draft.selectedTagIds.length} selected</span>
+    <section className="rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-xl font-semibold text-text-60">Edit assigned tags</h3>
+        <span className="text-sm font-medium text-text-35">{draft.selectedTagIds.length} selected</span>
       </div>
       {taxonomyGroups.map(({ category, tags }) => (
         <TaxonomyCategoryPicker

@@ -142,7 +142,7 @@ describe("upload inputs", () => {
     expect(screen.getByText("Source Type")).toBeTruthy();
     expect(screen.getByPlaceholderText("https://example.com/recipe")).toBeTruthy();
     expect(screen.queryByLabelText("Title")).toBeNull();
-    expect(screen.getByTestId("upload-content").className).toContain("upload_content-error");
+    expect(screen.getByTestId("upload-content").getAttribute("data-upload-error")).toBe("true");
   });
 
   it("hydrates the draft fields after uploading a text recipe file", async () => {

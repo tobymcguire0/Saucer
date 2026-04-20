@@ -37,23 +37,25 @@ function SearchFilterPanel({
   sidebarTagSearchKey,
 }: SearchFilterPanelProps) {
   return (
-    <div className="sidebar-section">
-      <div className="section-heading">
-        <h2>Search and filter</h2>
+    <div className="rounded-[var(--radius-card)] border border-panel-15 bg-background-0 p-5 shadow-[var(--shadow-panel)]">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-xl font-semibold text-text-60">Search and filter</h2>
       </div>
-      <label className="field">
-        <span>Search</span>
+      <label className="field mt-4">
+        <span className="text-sm font-medium text-text-50">Search</span>
         <input
+          className="field-input"
           value={query.searchText}
           onChange={(event) => updateSearchText(event.currentTarget.value)}
           placeholder="Search title, ingredients, or instructions"
         />
       </label>
 
-      <div className="two-column">
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="field">
-          <span>Sort by</span>
+          <span className="text-sm font-medium text-text-50">Sort by</span>
           <select
+            className="field-select"
             value={query.sortBy}
             onChange={(event) => {
               const { value } = event.currentTarget;
@@ -74,8 +76,9 @@ function SearchFilterPanel({
           </select>
         </label>
         <label className="field">
-          <span>Group by</span>
+          <span className="text-sm font-medium text-text-50">Group by</span>
           <select
+            className="field-select"
             value={groupByCategoryId}
             onChange={(event) => updateGroupByCategory(event.currentTarget.value)}
           >
@@ -89,7 +92,7 @@ function SearchFilterPanel({
         </label>
       </div>
 
-      <div className="filter-groups">
+      <div className="mt-5">
         <TaxonomyCategoryPicker
           categoryName="Tags"
           inputValue={sidebarTagInput}

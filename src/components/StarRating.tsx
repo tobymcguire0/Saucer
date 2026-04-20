@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cn } from "../lib/cn";
 
 type StarRatingProps = {
   rating: number;
@@ -19,17 +20,21 @@ function StarRating({
   const displayValue = hoverValue || rating;
 
   return (
-    <div
-      className={`star-rating${compact ? " star-rating-compact" : ""}`}
-      aria-label={label}
-      onMouseLeave={() => setHoverValue(0)}
-    >
+    <div className={cn("flex items-center", compact ? "gap-0.5" : "gap-1")} aria-label={label} onMouseLeave={() => setHoverValue(0)}>
       {[1, 2, 3, 4, 5].map((value) => (
         <button
           key={value}
           type="button"
-          className={value <= displayValue ? "rating-star rating-star-filled" : "rating-star"}
+          className={cn(
+            "rounded-full border border-transparent bg-transparent p-1 leading-none transition",
+            "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent-10",
+            compact ? "text-lg" : "text-2xl",
+            value <= displayValue ? "text-accent-45" : "text-panel-25",
+            "hover:text-accent-50",
+          )}
           aria-label={`${label}: ${value} star${value === 1 ? "" : "s"}`}
+          aria-pressed={value === rating}
+          data-filled={value <= displayValue}
           onMouseEnter={() => setHoverValue(value)}
           onFocus={() => setHoverValue(value)}
           onBlur={() => setHoverValue(0)}

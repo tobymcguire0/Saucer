@@ -138,15 +138,15 @@ describe("recipe browse and detail UI", () => {
     const fourStar = within(card).getByRole("button", { name: "Rate Star Test: 4 stars" });
 
     await user.hover(fourStar);
-    expect(fourStar.className).toContain("rating-star-filled");
+    expect(fourStar.getAttribute("data-filled")).toBe("true");
 
     await user.click(fourStar);
 
     await waitFor(() =>
       expect(screen.getByTestId("status-bar").textContent).toContain("Recipe rating updated."),
     );
-    expect(within(card).getByRole("button", { name: "Rate Star Test: 4 stars" }).className).toContain(
-      "rating-star-filled",
+    expect(within(card).getByRole("button", { name: "Rate Star Test: 4 stars" }).getAttribute("data-filled")).toBe(
+      "true",
     );
   });
 
@@ -222,7 +222,7 @@ describe("recipe browse and detail UI", () => {
     expect(within(detailView).getByText("Random Test")).toBeTruthy();
   });
 
-  it("highlights the active workspace button with nav-active class", async () => {
+  it("highlights the active workspace button with pressed state", async () => {
     renderApp();
 
     await waitFor(() =>
@@ -232,14 +232,14 @@ describe("recipe browse and detail UI", () => {
     const browseBtn = screen.getByRole("button", { name: "Browse recipes" });
     const taxonomyBtn = screen.getByRole("button", { name: "Manage taxonomy" });
 
-    expect(browseBtn.className).toContain("nav-active");
-    expect(taxonomyBtn.className).not.toContain("nav-active");
+    expect(browseBtn.getAttribute("aria-pressed")).toBe("true");
+    expect(taxonomyBtn.getAttribute("aria-pressed")).toBe("false");
 
     const user = userEvent.setup();
     await user.click(taxonomyBtn);
 
-    expect(taxonomyBtn.className).toContain("nav-active");
-    expect(browseBtn.className).not.toContain("nav-active");
+    expect(taxonomyBtn.getAttribute("aria-pressed")).toBe("true");
+    expect(browseBtn.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("creates a new tag under an existing category while editing a recipe draft", async () => {
@@ -267,7 +267,7 @@ describe("recipe browse and detail UI", () => {
     );
 
     const fusionButtons = screen.getAllByRole("button", { name: "Fusion" });
-    expect(fusionButtons.some((button) => button.className.includes("chip-active"))).toBe(true);
+    expect(fusionButtons.some((button) => button.getAttribute("aria-pressed") === "true")).toBe(true);
   });
 
   it("shows only relevant draft taxonomy chips above the confidence threshold", async () => {

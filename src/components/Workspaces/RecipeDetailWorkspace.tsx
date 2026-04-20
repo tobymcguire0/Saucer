@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { sortTagIdsForPreview } from "../recipeTagPreview";
-import StarRating from "../StarRating";
+import { cn } from "../../lib/cn";
 import { useRecipeDetailViewModel } from "../../features/browse/useRecipeDetailViewModel";
+import StarRating from "../StarRating";
+import { sortTagIdsForPreview } from "../recipeTagPreview";
 
 function RecipeDetailWorkspace() {
   const { recipe, closeRecipeDetail, deleteRecipe, updateRecipeRating, openEditEditor, tagLookup, categoryLookup } =
@@ -17,13 +18,17 @@ function RecipeDetailWorkspace() {
 
   if (!recipe) {
     return (
-      <section className="recipe-detail-view">
-        <div className="recipe-detail-header">
+      <section className="rounded-[var(--radius-card)] border border-panel-15 bg-background-0 p-5 shadow-[var(--shadow-panel)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="eyebrow">Recipe detail</p>
-            <h2>No recipe selected</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary-60">
+              Recipe detail
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-text-60">
+              No recipe selected
+            </h2>
           </div>
-          <button type="button" className="secondary" onClick={closeRecipeDetail}>
+          <button type="button" className="btn-secondary" onClick={closeRecipeDetail}>
             Back to browse
           </button>
         </div>
@@ -32,20 +37,25 @@ function RecipeDetailWorkspace() {
   }
 
   return (
-    <section className="recipe-detail-view" data-testid="recipe-detail-view">
-      <div className="recipe-detail-header">
+    <section
+      className="space-y-5 rounded-[var(--radius-card)] border border-panel-15 bg-background-0 p-5 shadow-[var(--shadow-panel)]"
+      data-testid="recipe-detail-view"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="eyebrow">Recipe detail</p>
-          <h2>{recipe.title}</h2>
-          <p className="muted">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary-60">
+            Recipe detail
+          </p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-text-60">{recipe.title}</h2>
+          <p className="mt-2 text-sm text-text-35">
             {recipe.cuisine || "Unknown cuisine"} · {recipe.mealType || "Any meal"} ·{" "}
             {recipe.servings || "Servings not set"}
           </p>
         </div>
-        <div className="button-row">
+        <div className="flex flex-wrap gap-3">
           <button
             type="button"
-            className="secondary"
+            className="btn-secondary"
             onClick={() => {
               setDeleteConfirming(false);
               closeRecipeDetail();
@@ -55,6 +65,7 @@ function RecipeDetailWorkspace() {
           </button>
           <button
             type="button"
+            className="btn-primary"
             onClick={() => {
               setDeleteConfirming(false);
               openEditEditor(recipe);
@@ -64,7 +75,11 @@ function RecipeDetailWorkspace() {
           </button>
           <button
             type="button"
-            className={deleteConfirming ? "" : "secondary"}
+            className={cn(
+              deleteConfirming
+                ? "btn-primary border-accent-55 bg-accent-50 hover:border-accent-60 hover:bg-accent-55 active:bg-accent-60"
+                : "btn-secondary",
+            )}
             onClick={() => {
               if (deleteConfirming) {
                 void deleteRecipe(recipe.id);
@@ -78,16 +93,22 @@ function RecipeDetailWorkspace() {
         </div>
       </div>
 
-      <div className="recipe-detail-grid">
-        <div className="recipe-detail-primary panel">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.9fr)]">
+        <div className="flex flex-col gap-4 rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
           {recipe.heroImage ? (
-            <img className="recipe-detail-image" src={recipe.heroImage} alt={recipe.title} />
+            <img
+              className="min-h-[260px] w-full rounded-[calc(var(--radius-card)-0.35rem)] bg-panel-10 object-cover"
+              src={recipe.heroImage}
+              alt={recipe.title}
+            />
           ) : (
-            <div className="recipe-detail-image recipe-image-placeholder">No image</div>
+            <div className="grid min-h-[260px] w-full place-items-center rounded-[calc(var(--radius-card)-0.35rem)] bg-panel-5 text-sm font-medium text-text-35">
+              No image
+            </div>
           )}
-          <p>{recipe.summary}</p>
-          <div className="recipe-detail-rating">
-            <span className="muted">Your rating: </span>
+          <p className="text-sm leading-6 text-text-45">{recipe.summary}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-text-35">Your rating:</span>
             <StarRating
               rating={recipe.rating}
               label={`Rate ${recipe.title}`}
@@ -97,7 +118,7 @@ function RecipeDetailWorkspace() {
               }}
             />
           </div>
-          <div className="chip-wrap">
+          <div className="flex flex-wrap gap-2">
             {sortedTagIds.map((tagId) => (
               <span key={tagId} className="chip chip-static">
                 {tagLookup.get(tagId)?.name ?? tagId}
@@ -106,10 +127,10 @@ function RecipeDetailWorkspace() {
           </div>
         </div>
 
-        <div className="recipe-detail-secondary">
-          <section className="panel">
-            <h3>Ingredients</h3>
-            <ul>
+        <div className="flex flex-col gap-4">
+          <section className="rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
+            <h3 className="text-xl font-semibold text-text-60">Ingredients</h3>
+            <ul className="mt-3 space-y-2 pl-5 text-sm leading-6 text-text-45">
               {recipe.ingredients.map((ingredient) => (
                 <li key={ingredient.id}>{ingredient.raw}</li>
               ))}
@@ -118,9 +139,9 @@ function RecipeDetailWorkspace() {
         </div>
       </div>
 
-      <section className="recipe-detail-instructions panel">
-        <h3>Instructions</h3>
-        <ol>
+      <section className="rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
+        <h3 className="text-xl font-semibold text-text-60">Instructions</h3>
+        <ol className="mt-3 space-y-2 pl-5 text-sm leading-6 text-text-45">
           {recipe.instructions.map((instruction) => (
             <li key={instruction}>{instruction}</li>
           ))}

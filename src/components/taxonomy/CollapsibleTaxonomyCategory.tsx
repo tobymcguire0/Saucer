@@ -15,24 +15,24 @@ function CollapsibleTaxonomyCategory({
   onToggle,
 }: CollapsibleTaxonomyCategoryProps) {
   return (
-    <section className="taxonomy-category-panel">
+    <section className="mt-4 first:mt-0">
       <button
         type="button"
-        className="taxonomy-category-toggle"
+        className="flex w-full items-start justify-between gap-4 rounded-[var(--radius-control)] border border-panel-10 bg-panel-0 px-4 py-4 text-left transition hover:border-primary-20 hover:bg-primary-5"
         onClick={onToggle}
         aria-expanded={!collapsed}
       >
-        <span>
-          <strong>{category.name}</strong>
-          <span className="muted taxonomy-category-meta">
+        <span className="flex flex-col">
+          <strong className="text-text-60">{category.name}</strong>
+          <span className="mt-1 text-sm text-text-35">
             {category.description} · {tags.length} tags
           </span>
         </span>
-        <span>{collapsed ? "Expand" : "Collapse"}</span>
+        <span className="text-sm font-medium text-primary-70">{collapsed ? "Expand" : "Collapse"}</span>
       </button>
 
       {collapsed ? null : (
-        <div className="taxonomy-card-grid">
+        <div className="mt-4 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
           {tags.map((tag) => (
             <TaxonomyTagCard key={tag.id} tag={tag} />
           ))}

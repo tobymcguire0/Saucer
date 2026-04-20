@@ -40,17 +40,24 @@ function RecipeEditorModal() {
   }
 
   return (
-    <div className="modal-backdrop">
-      <section className="modal">
-        <div className="section-heading">
-          <h2>{editorMode === "edit" ? "Edit recipe" : "Review recipe draft"}</h2>
-          <div className="button-row">
+    <div className="fixed inset-0 z-20 grid place-items-center bg-text-100/55 p-6 backdrop-blur-sm">
+      <section className="max-h-[calc(100vh-3rem)] w-full max-w-[1080px] space-y-5 overflow-auto rounded-[var(--radius-card)] border border-panel-20 bg-background-0 p-5 shadow-[var(--shadow-floating)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary-60">
+              Editor
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-text-60">
+              {editorMode === "edit" ? "Edit recipe" : "Review recipe draft"}
+            </h2>
+          </div>
+          <div className="flex flex-wrap gap-3">
             {editorMode === "create" && draftImported && !showSourceControls ? (
-              <button type="button" className="secondary" onClick={revealSourceControls}>
+              <button type="button" className="btn-secondary" onClick={revealSourceControls}>
                 Change source
               </button>
             ) : null}
-            <button type="button" className="secondary" onClick={closeEditor}>
+            <button type="button" className="btn-secondary" onClick={closeEditor}>
               Close
             </button>
           </div>
@@ -94,12 +101,12 @@ function RecipeEditorModal() {
         ) : null}
 
         {showDraftForm ? (
-          <div className="button-row">
-            <button type="button" onClick={() => void saveDraft()}>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" className="btn-primary" onClick={() => void saveDraft()}>
               {editorMode === "edit" ? "Save recipe" : "Create recipe"}
             </button>
             {mealTimeCategory ? (
-              <span className="muted">
+              <span className="text-sm text-text-35">
                 Group browsing is ready for {mealTimeCategory.name.toLowerCase()} and every other
                 category.
               </span>

@@ -22,7 +22,7 @@ export function useSyncEffect() {
   useEffect(() => {
     if (!auth.isAuthenticated) return;
     const pull = () => void useSyncStore.getState().pullChanges();
-    const id = setInterval(pull, 30_000);
+    const id = setInterval(pull, 10_000);
     window.addEventListener("focus", pull);
     return () => {
       clearInterval(id);

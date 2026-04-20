@@ -157,7 +157,11 @@ export class FileAppStore implements AppStore {
     await this.write(data);
   }
 
-  async applyMutations(userId: string, clientId: string, mutations: Mutation[]): Promise<SyncPayload> {
+  async applyMutations(
+    userId: string, 
+    clientId: string, 
+    mutations: Mutation[]): Promise<SyncPayload> 
+    {
     const data = await this.read();
     const user = this.ensureUser(data, userId);
     const applied = new Set(user.appliedMutations);
@@ -306,7 +310,10 @@ export class PostgresAppStore implements AppStore {
     return payload;
   }
 
-  async applyMutations(userId: string, clientId: string, mutations: Mutation[]): Promise<SyncPayload> {
+  async applyMutations(
+    userId: string, 
+    clientId: string, 
+    mutations: Mutation[]): Promise<SyncPayload> {
     const client: PoolClient = await this.pool.connect();
     let finalRevision = 0;
     try {

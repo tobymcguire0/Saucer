@@ -82,7 +82,7 @@ export function createApp({ store, verifyToken, fetchImpl }: AppConfig) {
     const clientId = getClientId(req, res);
     if (!clientId) return;
 
-    const cursor = req.query["cursor"] as string | undefined;
+    const cursor = req.query.cursor as string | undefined;
     if (cursor !== undefined && !/^\d+$/.test(cursor)) {
       res.status(400).json({ error: "cursor must be a numeric string." });
       return;
@@ -102,9 +102,9 @@ export function createApp({ store, verifyToken, fetchImpl }: AppConfig) {
     }
     for (const m of body.mutations) {
       const mutation = m as Record<string, unknown>;
-      if (mutation["type"] === "upsertRecipe") {
-        const recipe = mutation["recipe"] as Record<string, unknown> | undefined;
-        if (!recipe?.["id"]) {
+      if (mutation.type === "upsertRecipe") {
+        const recipe = mutation.recipe as Record<string, unknown> | undefined;
+        if (!recipe?.id) {
           res.status(400).json({ error: "Recipe id is required." });
           return;
         }
@@ -115,7 +115,7 @@ export function createApp({ store, verifyToken, fetchImpl }: AppConfig) {
   });
 
   app.get("/api/recipes/:id", requireAuth, async (req, res) => {
-    const recipe = await store.getRecipe(req.userId, req.params["id"] as string);
+    const recipe = await store.getRecipe(req.userId, req.params.id as string);
     if (!recipe) {
       res.status(404).json({ error: "Recipe not found." });
       return;
@@ -145,10 +145,10 @@ export function createApp({ store, verifyToken, fetchImpl }: AppConfig) {
         return;
       }
 
-      const s3 = new S3Client({ region: process.env["AWS_REGION"] });
+      const s3 = new S3Client({ region: process.env.AWS_REGION });
       const buffer = await sharp(req.file.buffer).jpeg().toBuffer();
       const key = `images/${req.userId}/${randomUUID()}.jpg`;
-      const bucket = process.env["S3_BUCKET_NAME"] ?? "saucer-s3";
+      const bucket = process.env.S3_BUCKET_NAME ?? "saucer-s3";
 
       await s3.send(
         new PutObjectCommand({

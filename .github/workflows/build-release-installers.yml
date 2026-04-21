@@ -66,12 +66,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Apple signing is opt-in so macOS builds can still publish unsigned artifacts.
+          APPLE_CERTIFICATE: ${{ matrix.os == 'macos-latest' && vars.TAURI_ENABLE_APPLE_SIGNING == 'true' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ matrix.os == 'macos-latest' && vars.TAURI_ENABLE_APPLE_SIGNING == 'true' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ matrix.os == 'macos-latest' && vars.TAURI_ENABLE_APPLE_SIGNING == 'true' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ matrix.os == 'macos-latest' && vars.TAURI_ENABLE_APPLE_SIGNING == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ matrix.os == 'macos-latest' && vars.TAURI_ENABLE_APPLE_SIGNING == 'true' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && vars.TAURI_ENABLE_APPLE_SIGNING == 'true' && secrets.APPLE_TEAM_ID || '' }}
         with:
           tagName: saucer-${{ github.run_number }}
           releaseName: Saucer desktop build #${{ github.run_number }}

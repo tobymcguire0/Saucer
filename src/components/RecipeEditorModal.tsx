@@ -12,6 +12,7 @@ function RecipeEditorModal() {
     draftImported,
     showSourceControls,
     uploadErrorActive,
+    uploadShakeActive,
     isImporting,
     visibleDraftSuggestions,
     showSourceSelector,
@@ -68,6 +69,7 @@ function RecipeEditorModal() {
             draft={draft}
             showImportControls={showImportControls}
             uploadErrorActive={uploadErrorActive}
+            uploadShakeActive={uploadShakeActive}
             isImporting={isImporting}
             clearUploadError={clearUploadError}
             updateDraft={updateDraft}

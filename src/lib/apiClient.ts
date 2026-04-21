@@ -1,5 +1,7 @@
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
 
+// Stable per-device identity sent with every request so the server can attribute
+// mutations and avoid echoing a client's own changes back during sync.
 function getOrCreateClientId(): string {
   const key = "saucer:clientId";
   let id = localStorage.getItem(key);
@@ -71,6 +73,16 @@ export interface ApiBootstrapResponse {
   taxonomyRevision: number;
 }
 
+export interface ApiPhotoExtraction {
+  title: string;
+  summary: string;
+  ingredients: string[];
+  instructions: string[];
+  servings: string;
+  cuisine: string;
+  mealType: string;
+}
+
 export class ApiClient {
   constructor(private getToken: () => string | null) {}
 
@@ -114,5 +126,13 @@ export class ApiClient {
 
   async push(mutations: ApiMutation[]): Promise<ApiSyncPayload> {
     return this.request<ApiSyncPayload>("POST", "/api/sync/push", { mutations });
+  }
+
+  async extractPhoto(imageDataUrl: string): Promise<ApiPhotoExtraction> {
+    return this.request<ApiPhotoExtraction>("POST", "/api/extract-photo", { imageDataUrl });
+  }
+
+  async extractRecipeText(text: string, pageTitle?: string): Promise<ApiPhotoExtraction> {
+    return this.request<ApiPhotoExtraction>("POST", "/api/extract-recipe-text", { text, title: pageTitle });
   }
 }

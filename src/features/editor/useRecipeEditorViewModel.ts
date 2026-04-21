@@ -28,6 +28,7 @@ export function useRecipeEditorViewModel() {
       draftImported: store.draftImported,
       showSourceControls: store.showSourceControls,
       uploadErrorActive: store.uploadErrorActive,
+      uploadShakeActive: store.uploadShakeActive,
       isImporting: store.isImporting,
       closeEditor: store.closeEditor,
       openCreateEditor: store.openCreateEditor,

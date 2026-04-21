@@ -25,6 +25,8 @@ export interface RecipeStore {
   replaceAll(recipes: Recipe[], taxonomy: Taxonomy): Promise<AppSnapshot>;
 }
 
+// JSON.stringify produces a quoted, escaped string safe for YAML frontmatter
+// (handles colons, quotes, and other YAML-unsafe characters in recipe fields).
 function escapeFrontmatter(value: string) {
   return JSON.stringify(value);
 }
@@ -212,6 +214,7 @@ function getLocalStorage(): StorageLike | undefined {
   return typeof window === "undefined" ? undefined : window.localStorage;
 }
 
+// __TAURI_INTERNALS__ is injected by the Tauri runtime; absent in browser/test environments.
 function canUseTauri() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -264,6 +267,8 @@ export class ObsidianRecipeStore implements RecipeStore {
       taxonomy: snapshot.taxonomy ?? createDefaultTaxonomy(),
     };
 
+    // recipePaths tells Rust the target filesystem path for each recipe file;
+    // without it the backend wouldn't know where to write the markdown content.
     const nextSnapshot = await invoke<VaultSnapshot>("replace_vault_snapshot", {
       snapshot: {
         recipeFiles: normalized.recipeFiles,

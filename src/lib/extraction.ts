@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import { createWorker } from "tesseract.js";
 
-import type { SourceType } from "./models";
+import type { ApiPhotoExtraction } from "./apiClient";
+import type { RecipeDraft, SourceType } from "./models";
 import { createEmptyDraft } from "./taxonomy";
 
 const cuisineHints = [
@@ -45,7 +47,7 @@ function toText(value: unknown): string {
       toText(record.text) ||
       toText(record.name) ||
       toText(record.url) ||
-      toText(record["@value"]) ||
+      toText(record["@value"]) || // JSON-LD RDF literal form
       ""
     );
   }
@@ -184,6 +186,7 @@ function extractJsonLdRecipe(document: Document) {
   for (const script of scripts) {
     try {
       const parsed = JSON.parse(script.textContent ?? "");
+      // JSON-LD may embed multiple typed nodes under an @graph container.
       const entries = Array.isArray(parsed)
         ? parsed
         : "@graph" in parsed && Array.isArray(parsed["@graph"])
@@ -209,7 +212,13 @@ type WebsiteImportPayload = {
   html: string;
 };
 
-export function parseDraftFromWebsiteHtml(html: string, sourceUrl: string) {
+export type TextExtractor = (text: string, pageTitle?: string) => Promise<ApiPhotoExtraction>;
+
+export async function parseDraftFromWebsiteHtml(
+  html: string,
+  sourceUrl: string,
+  extractText?: TextExtractor,
+) {
   const parser = new DOMParser();
   const document = parser.parseFromString(html, "text/html");
   const draft = createEmptyDraft("website");
@@ -217,6 +226,7 @@ export function parseDraftFromWebsiteHtml(html: string, sourceUrl: string) {
   const jsonLdRecipe = extractJsonLdRecipe(document);
 
   if (jsonLdRecipe) {
+    // JSON-LD is already structured — no need for LLM extraction.
     draft.title = normalizeExtractedText(jsonLdRecipe.name) || "Imported recipe";
     draft.summary = normalizeExtractedText(jsonLdRecipe.description);
     draft.ingredientsText = normalizeMultilineText(
@@ -241,16 +251,35 @@ export function parseDraftFromWebsiteHtml(html: string, sourceUrl: string) {
     return draft;
   }
 
+  // No JSON-LD: try LLM extraction on the page body text before falling back to heuristics.
+  const heroImage = extractImageUrl(
+    document.querySelector('meta[property="og:image"]')?.getAttribute("content") ?? "",
+    sourceUrl,
+  );
+  if (extractText) {
+    try {
+      const result = await extractText(document.body.textContent ?? "", document.title);
+      draft.title = result.title || document.title || "Imported recipe";
+      draft.summary = result.summary;
+      draft.ingredientsText = result.ingredients.join("\n");
+      draft.instructionsText = result.instructions.join("\n");
+      draft.servings = result.servings;
+      draft.cuisine = result.cuisine;
+      draft.mealType = result.mealType;
+      draft.heroImage = heroImage || undefined;
+      return draft;
+    } catch {
+      // LLM call failed — fall through to heuristic parsing.
+    }
+  }
+
   const fallbackDraft = extractDraftFromPlainText(document.body.textContent ?? "", "website");
   return {
     ...fallbackDraft,
     sourceRef: sourceUrl,
     title: document.title || fallbackDraft.title,
     summary: fallbackDraft.summary || "Fallback extraction from page text.",
-    heroImage: extractImageUrl(
-      document.querySelector('meta[property="og:image"]')?.getAttribute("content") ?? "",
-      sourceUrl,
-    ),
+    heroImage: heroImage || undefined,
   };
 }
 
@@ -281,9 +310,9 @@ function normalizeMultilineText(value: string): string {
     .trim();
 }
 
-export async function extractDraftFromWebsite(url: string) {
+export async function extractDraftFromWebsite(url: string, extractText?: TextExtractor) {
   const payload = await invoke<WebsiteImportPayload>("fetch_recipe_page", { url });
-  return parseDraftFromWebsiteHtml(payload.html, payload.url || url);
+  return parseDraftFromWebsiteHtml(payload.html, payload.url || url, extractText);
 }
 
 function readFileAsText(file: File) {
@@ -304,22 +333,69 @@ function readFileAsDataUrl(file: File) {
   });
 }
 
-export async function extractDraftFromTextFile(file: File) {
+export async function extractDraftFromTextFile(file: File, extractText?: TextExtractor) {
   const text = await readFileAsText(file);
+
+  if (extractText) {
+    try {
+      const result = await extractText(text);
+      const draft = createEmptyDraft("text");
+      draft.title = result.title || file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+      draft.summary = result.summary;
+      draft.ingredientsText = result.ingredients.join("\n");
+      draft.instructionsText = result.instructions.join("\n");
+      draft.servings = result.servings;
+      draft.cuisine = result.cuisine;
+      draft.mealType = result.mealType;
+      draft.sourceRef = file.name;
+      return draft;
+    } catch {
+      // LLM call failed — fall through to local parsing.
+    }
+  }
+
   const draft = extractDraftFromPlainText(text, "text");
   draft.sourceRef = file.name;
   return draft;
 }
-
 export async function extractDraftFromPhoto(file: File) {
-  const heroImage = await readFileAsDataUrl(file);
+  const dataUrl = await readFileAsDataUrl(file);
+  const worker = await createWorker("eng");
+  try {
+    const { data: { text } } = await worker.recognize(dataUrl);
+    const draft = extractDraftFromPlainText(text, "photo");
+    if (!draft.title || draft.title === "Imported recipe") {
+      draft.title = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+    }
+    draft.sourceRef = file.name;
+    draft.heroImage = dataUrl;
+    draft.mealType = draft.mealType || inferFromKeywords(file.name, mealTypeHints);
+    draft.cuisine = draft.cuisine || inferFromKeywords(file.name, cuisineHints);
+    return draft;
+  } finally {
+    await worker.terminate();
+  }
+}
+
+export async function extractDraftFromPhotoViaApi(
+  file: File,
+  extractPhoto: (dataUrl: string) => Promise<ApiPhotoExtraction>,
+): Promise<RecipeDraft> {
+  const dataUrl = await readFileAsDataUrl(file);
+  const result = await extractPhoto(dataUrl);
   const draft = createEmptyDraft("photo");
+  draft.title = result.title || file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+  draft.summary = result.summary;
+  draft.ingredientsText = result.ingredients.join("\n");
+  draft.instructionsText = result.instructions.join("\n");
+  draft.servings = result.servings;
+  draft.cuisine = result.cuisine || inferFromKeywords(file.name, cuisineHints);
+  draft.mealType = result.mealType || inferFromKeywords(file.name, mealTypeHints);
   draft.sourceRef = file.name;
-  draft.title = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
-  draft.summary =
-    "Image imports prefill the photo and filename. OCR and vision extraction can be upgraded behind the extraction adapter later.";
-  draft.heroImage = heroImage;
-  draft.mealType = inferFromKeywords(file.name, mealTypeHints);
-  draft.cuisine = inferFromKeywords(file.name, cuisineHints);
+  draft.heroImage = dataUrl;
   return draft;
+}
+
+async function prepareImage(path){
+  const buffer = await sharp(path).resize.jpeg().toBuffer();
 }

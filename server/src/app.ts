@@ -1,11 +1,36 @@
 import { randomUUID } from "node:crypto";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import Anthropic from "@anthropic-ai/sdk";
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import sharp from "sharp";
 import type { AppStore } from "./store.js";
 import type { Mutation, Taxonomy } from "./types.js";
+
+const EXTRACTION_PROMPT = `Extract the recipe from this image. Return ONLY a JSON object (no markdown) with:
+- title: string
+- summary: string (1-2 sentences)
+- ingredients: string[] (each with quantity, e.g. "2 cups flour")
+- instructions: string[] (each step as plain text, no leading numbers)
+- servings: string (e.g. "4 servings", or "")
+- cuisine: string (e.g. "Italian", or "")
+- mealType: string (e.g. "Dinner", or "")`;
+
+const TEXT_EXTRACTION_PROMPT = `Extract the recipe from this text. Return ONLY a JSON object (no markdown) with:
+- title: string
+- summary: string (1-2 sentences)
+- ingredients: string[] (each with quantity, e.g. "2 cups flour")
+- instructions: string[] (each step as plain text, no leading numbers)
+- servings: string (e.g. "4 servings", or "")
+- cuisine: string (e.g. "Italian", or "")
+- mealType: string (e.g. "Dinner", or "")`;
+
+function parseModelJson(raw: string): unknown {
+  // Strip optional markdown code fences the model may emit despite instructions.
+  const stripped = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/, "").trim();
+  return JSON.parse(stripped);
+}
 
 declare global {
   namespace Express {
@@ -22,13 +47,15 @@ interface AppConfig {
   store: AppStore;
   verifyToken: VerifyToken;
   fetchImpl: FetchImpl;
+  anthropicApiKey?: string;
 }
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-export function createApp({ store, verifyToken, fetchImpl }: AppConfig) {
+export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: AppConfig) {
   const app = express();
-  app.use(express.json());
+  // Increased limit to accommodate base64-encoded recipe photos (~300–500KB after resize).
+  app.use(express.json({ limit: "10mb" }));
   app.use(cors());
 
   function requireAuth(req: Request, res: Response, next: NextFunction): void {
@@ -162,6 +189,86 @@ export function createApp({ store, verifyToken, fetchImpl }: AppConfig) {
       res.json({ imageUrl: `https://${bucket}.s3.amazonaws.com/${key}` });
     },
   );
+
+  app.post("/api/extract-photo", requireAuth, async (req, res) => {
+    if (!anthropicApiKey) {
+      res.status(503).json({ error: "Photo extraction is not configured on this server." });
+      return;
+    }
+
+    const { imageDataUrl } = req.body as { imageDataUrl?: string };
+    if (!imageDataUrl?.startsWith("data:image/")) {
+      res.status(400).json({ error: "imageDataUrl must be a data: image URI." });
+      return;
+    }
+
+    const commaIndex = imageDataUrl.indexOf(",");
+    const base64 = imageDataUrl.slice(commaIndex + 1);
+
+    // Resize to ≤1024px wide before sending to reduce token count and cost.
+    const resizedBuffer = await sharp(Buffer.from(base64, "base64"))
+      .resize({ width: 1024, withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+
+    const client = new Anthropic({ apiKey: anthropicApiKey });
+    const message = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: "image/jpeg", data: resizedBuffer.toString("base64") },
+            },
+            { type: "text", text: EXTRACTION_PROMPT },
+          ],
+        },
+      ],
+    });
+
+    const rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
+    try {
+      res.json(parseModelJson(rawText));
+    } catch {
+      res.status(502).json({ error: "Model returned unparseable response.", raw: rawText });
+    }
+  });
+
+  app.post("/api/extract-recipe-text", requireAuth, async (req, res) => {
+    if (!anthropicApiKey) {
+      res.status(503).json({ error: "Recipe extraction is not configured on this server." });
+      return;
+    }
+
+    const { text, title } = req.body as { text?: string; title?: string };
+    if (!text?.trim()) {
+      res.status(400).json({ error: "text is required." });
+      return;
+    }
+
+    // Truncate to limit token usage on very long pages.
+    const truncated = text.slice(0, 8000);
+    const prompt = title
+      ? `Page title: ${title}\n\n${TEXT_EXTRACTION_PROMPT}\n\n${truncated}`
+      : `${TEXT_EXTRACTION_PROMPT}\n\n${truncated}`;
+
+    const client = new Anthropic({ apiKey: anthropicApiKey });
+    const message = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
+    try {
+      res.json(parseModelJson(rawText));
+    } catch {
+      res.status(502).json({ error: "Model returned unparseable response.", raw: rawText });
+    }
+  });
 
   app.post("/api/import/website", requireAuth, async (req, res) => {
     const { url } = req.body as { url?: string };

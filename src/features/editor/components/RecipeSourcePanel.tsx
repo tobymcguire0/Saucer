@@ -6,6 +6,7 @@ type RecipeSourcePanelProps = {
   draft: RecipeDraft;
   showImportControls: boolean;
   uploadErrorActive: boolean;
+  uploadShakeActive: boolean;
   isImporting: boolean;
   clearUploadError: () => void;
   updateDraft: (patch: Partial<RecipeDraft>) => void;
@@ -18,6 +19,7 @@ function RecipeSourcePanel({
   draft,
   showImportControls,
   uploadErrorActive,
+  uploadShakeActive,
   isImporting,
   clearUploadError,
   updateDraft,
@@ -60,6 +62,7 @@ function RecipeSourcePanel({
             uploadErrorActive
               ? "border-accent-35 bg-accent-5 shadow-[0_0_0_1px_color-mix(in_srgb,var(--color-accent-25)_55%,transparent)]"
               : "border-panel-15 bg-background-0",
+            uploadShakeActive && "animate-shake",
           )}
           data-testid="upload-content"
           data-upload-error={uploadErrorActive}

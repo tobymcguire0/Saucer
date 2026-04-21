@@ -82,6 +82,7 @@ function isPaletteRecord(value: unknown): value is Partial<Record<ThemeFamily, s
   return typeof value === "object" && value !== null;
 }
 
+// Step 50 is the base color; steps below 50 mix toward white, steps above mix toward black.
 function createScale(baseHex: string): ThemeScale {
   const scale = {} as ThemeScale;
 

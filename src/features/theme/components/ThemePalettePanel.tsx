@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { cn } from "../../../lib/cn";
 import {
-  normalizeHexColor,
   type ThemeFamily,
   type ThemePalette,
 } from "../../../lib/theme";
@@ -44,7 +42,7 @@ function ThemePalettePanel() {
   const palette = useThemeStore((state) => state.palette);
   const setPaletteColor = useThemeStore((state) => state.setPaletteColor);
   const [draft, setDraft] = useState<ThemePalette>(palette);
-  const [invalidFamilies, setInvalidFamilies] = useState<Partial<Record<ThemeFamily, true>>>({});
+  const [, setInvalidFamilies] = useState<Partial<Record<ThemeFamily, true>>>({});
 
   useEffect(() => {
     setDraft(palette);

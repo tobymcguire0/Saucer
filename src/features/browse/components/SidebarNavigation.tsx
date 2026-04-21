@@ -29,7 +29,7 @@ function SidebarNavigation({ activeView, setActiveWorkspace }: SidebarNavigation
           type="button"
           className={cn(
             "btn-secondary flex-1",
-            taxonomyActive && "border-accent-35 bg-panel-10 text-primary-75 ring-4 ring-primary-5",
+            taxonomyActive && "border-accent-60 bg-background-5 text-primary-75 ring-4 ring-primary-5",
           )}
           aria-pressed={taxonomyActive}
           data-active={taxonomyActive}

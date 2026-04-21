@@ -37,7 +37,7 @@ function RecipeCard({
   return (
     <article
       className={cn(
-        "group flex min-h-full cursor-pointer flex-col overflow-hidden rounded-[var(--radius-card)] border bg-background-0 shadow-[var(--shadow-panel)] transition duration-150",
+        "group flex min-h-full cursor-pointer flex-col overflow-hidden rounded-[var(--radius-card)] border bg-panel-5 shadow-[var(--shadow-panel)] transition duration-150",
         "border-panel-15 hover:-translate-y-0.5 hover:border-primary-25 hover:shadow-[var(--shadow-floating)]",
         "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-10",
         deleteConfirming && "border-accent-30",

@@ -20,7 +20,7 @@ function TaxonomyWorkspace() {
     mergeSelectedTags,
   } = useTaxonomyWorkspaceViewModel();
   const formCardClass =
-    "rounded-[var(--radius-card)] border border-panel-15 bg-background-0 p-5 shadow-[var(--shadow-panel)]";
+    "rounded-[var(--radius-card)] border border-panel-15 bg-panel-5  p-5 shadow-[var(--shadow-panel)]";
 
   return (
     <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">

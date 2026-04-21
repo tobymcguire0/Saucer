@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -10,12 +10,6 @@ import {
   themePaletteStorageKey,
 } from "../src/lib/theme";
 import { renderApp, resetMockAuth } from "./renderApp";
-
-async function expandThemePalette(user: ReturnType<typeof userEvent.setup>) {
-  const toggle = screen.getByRole("button", { name: /theme palette/i });
-  await user.click(toggle);
-  await waitFor(() => expect(toggle.getAttribute("aria-expanded")).toBe("true"));
-}
 
 describe("theme palette editor", () => {
   beforeEach(() => {
@@ -28,21 +22,15 @@ describe("theme palette editor", () => {
     cleanup();
   });
 
-  it("updates runtime palette tokens and persists the entered base color", async () => {
-    const user = userEvent.setup();
+  it("updates runtime palette tokens and persists the picked color", async () => {
     renderApp();
 
     await waitFor(() =>
       expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
-    expect(screen.queryByLabelText("Primary hex")).toBeNull();
 
-    await expandThemePalette(user);
-
-    const primaryInput = screen.getByLabelText("Primary hex");
-    await user.clear(primaryInput);
-    await user.type(primaryInput, "#3366aa");
-    await user.tab();
+    const primaryInput = screen.getByLabelText("Primary color");
+    fireEvent.change(primaryInput, { target: { value: "#3366aa" } });
 
     const expectedTokens = buildThemeTokens({
       ...defaultThemePalette,
@@ -74,18 +62,14 @@ describe("theme palette editor", () => {
       expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
-    await expandThemePalette(user);
-
-    const accentInput = screen.getByLabelText("Accent hex");
-    await user.clear(accentInput);
-    await user.type(accentInput, "#ff00aa");
-    await user.tab();
+    const accentInput = screen.getByLabelText("Accent color");
+    fireEvent.change(accentInput, { target: { value: "#ff00aa" } });
 
     await waitFor(() =>
       expect(document.documentElement.style.getPropertyValue("--color-accent-50")).toBe("#ff00aa"),
     );
 
-    await user.click(screen.getByRole("button", { name: "Reset palette" }));
+    await user.click(screen.getByRole("button", { name: /reset palette/i }));
 
     const expectedTokens = buildThemeTokens(defaultThemePalette);
 

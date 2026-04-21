@@ -54,7 +54,7 @@ function AppSidebar() {
           toggleFilterTag={toggleFilterTag}
           sidebarTagSearchKey="__all__"
         />
-          <ThemePalettePanel />
+        <ThemePalettePanel />
       </aside>
     );
   }

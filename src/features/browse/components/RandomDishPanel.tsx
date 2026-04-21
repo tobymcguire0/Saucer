@@ -10,7 +10,7 @@ function RandomDishPanel({
   chooseRandomRecipe,
 }: RandomDishPanelProps) {
   return (
-    <div className="rounded-[var(--radius-card)] border border-panel-15 bg-background-0 p-5 shadow-[var(--shadow-panel)]">
+    <div className="rounded-[var(--radius-card)] border border-panel-80 bg-panel-15 p-5 shadow-[var(--shadow-panel)]">
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl font-semibold text-text-60">Random dish</h2>
       </div>

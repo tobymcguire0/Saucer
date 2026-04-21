@@ -69,7 +69,7 @@ describe("theme palette editor", () => {
       expect(document.documentElement.style.getPropertyValue("--color-accent-50")).toBe("#ff00aa"),
     );
 
-    await user.click(screen.getByRole("button", { name: /reset palette/i }));
+    await user.click(screen.getByRole("button", { name: /reset/i }));
 
     const expectedTokens = buildThemeTokens(defaultThemePalette);
 

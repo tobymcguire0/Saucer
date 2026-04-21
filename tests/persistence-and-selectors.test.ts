@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ObsidianRecipeStore, parseRecipeMarkdown } from "../src/lib/persistence";
+import { ObsidianRecipeStore } from "../src/lib/persistence/obsidianStore";
+import { parseRecipeMarkdown } from "../src/lib/persistence";
 import { filterRecipes, groupRecipesByCategory } from "../src/lib/selectors";
 import { createDefaultTaxonomy } from "../src/lib/defaultTaxonomy";
 import type { Recipe } from "../src/lib/models";

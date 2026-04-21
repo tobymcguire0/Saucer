@@ -1,5 +1,6 @@
 import { resetBrowseStore } from "../features/browse/useBrowseStore";
 import { resetSaucerStore } from "../features/saucer/useSaucerStore";
+import { resetRecipeStore } from "../features/saucer/recipeStore";
 import { resetRecipeEditorStore } from "../features/editor/useRecipeEditorStore";
 import { resetStatusStore } from "../features/status/useStatusStore";
 import { resetSyncStore } from "../features/sync/useSyncStore";
@@ -14,4 +15,5 @@ export function resetAppStores() {
   resetSaucerStore();
   resetSyncStore();
   resetThemeStore();
+  resetRecipeStore();
 }

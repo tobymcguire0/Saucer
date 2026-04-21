@@ -195,6 +195,16 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
       recipe.id === recipeId ? { ...recipe, rating, updatedAt: new Date().toISOString() } : recipe,
     );
     await replaceAll(nextRecipes, taxonomy, "Recipe rating updated.");
+    const updatedRecipe = nextRecipes.find((r) => r.id === recipeId);
+    if (updatedRecipe) {
+      const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = updatedRecipe;
+      const { useSyncStore } = await import("../sync/useSyncStore");
+      void useSyncStore.getState().pushMutation({
+        type: "upsertRecipe",
+        clientMutationId: crypto.randomUUID(),
+        recipe: recipeInput,
+      });
+    }
   },
   saveCategory: async (name, description) => {
     const { recipes, taxonomy, replaceAll } = get();

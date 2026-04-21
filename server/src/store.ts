@@ -13,7 +13,12 @@ import type {
 
 export interface AppStore {
   getTaxonomy(userId: string): Promise<TaxonomyDocument>;
-  getSyncPayload(userId: string, clientId: string, cursor?: string): Promise<SyncPayload>;
+  getSyncPayload(
+    userId: string,
+    clientId: string,
+    cursor?: string,
+    taxonomyRevision?: number,
+  ): Promise<SyncPayload>;
   applyMutations(userId: string, clientId: string, mutations: Mutation[]): Promise<SyncPayload>;
   getRecipe(userId: string, recipeId: string): Promise<Recipe | null>;
   saveTaxonomy(userId: string, taxonomy: Taxonomy): Promise<TaxonomyDocument>;
@@ -64,7 +69,7 @@ const emptyTaxonomy = (): TaxonomyDocument => ({
   updatedAt: new Date().toISOString(),
 });
 
-function buildFilePayload(user: UserData, cursorRev: number): SyncPayload {
+function buildFilePayload(user: UserData, cursorRev: number, taxonomyRevision = 0): SyncPayload {
   const recipes: Recipe[] = [];
   const deletedIds: string[] = [];
   for (const stored of Object.values(user.recipes)) {
@@ -75,7 +80,13 @@ function buildFilePayload(user: UserData, cursorRev: number): SyncPayload {
       recipes.push(toRecipe(stored));
     }
   }
-  return { recipes, deletedIds, cursor: String(user.revision) };
+  const payload: SyncPayload = { recipes, deletedIds, cursor: String(user.revision) };
+  const taxonomyDoc = user.taxonomy ?? emptyTaxonomy();
+  if (taxonomyDoc.revision > taxonomyRevision) {
+    payload.taxonomy = taxonomyDoc.taxonomy;
+    payload.taxonomyRevision = taxonomyDoc.revision;
+  }
+  return payload;
 }
 
 export class FileAppStore implements AppStore {
@@ -113,7 +124,12 @@ export class FileAppStore implements AppStore {
     return user;
   }
 
-  async getSyncPayload(userId: string, clientId: string, cursor?: string): Promise<SyncPayload> {
+  async getSyncPayload(
+    userId: string,
+    clientId: string,
+    cursor?: string,
+    taxonomyRevision = 0,
+  ): Promise<SyncPayload> {
     const data = await this.read();
     const user = this.ensureUser(data, userId);
     const cursorRev = cursor !== undefined ? parseInt(cursor, 10) : 0;
@@ -121,7 +137,7 @@ export class FileAppStore implements AppStore {
     user.clientCursors[clientId] = cursorRev;
     await this.write(data);
 
-    return buildFilePayload(user, cursorRev);
+    return buildFilePayload(user, cursorRev, taxonomyRevision);
   }
 
   async saveRecipe(userId: string, input: RecipeInput): Promise<void> {
@@ -158,10 +174,10 @@ export class FileAppStore implements AppStore {
   }
 
   async applyMutations(
-    userId: string, 
-    clientId: string, 
-    mutations: Mutation[]): Promise<SyncPayload> 
-    {
+    userId: string,
+    clientId: string,
+    mutations: Mutation[],
+  ): Promise<SyncPayload> {
     const data = await this.read();
     const user = this.ensureUser(data, userId);
     const applied = new Set(user.appliedMutations);
@@ -271,8 +287,12 @@ export class PostgresAppStore implements AppStore {
     `);
   }
 
-  private async buildSyncPayload(userId: string, cursorRev: number): Promise<SyncPayload> {
-    const [recipesResult, deletedResult, revResult] = await Promise.all([
+  private async buildSyncPayload(
+    userId: string,
+    cursorRev: number,
+    taxonomyRevision = 0,
+  ): Promise<SyncPayload> {
+    const [recipesResult, deletedResult, revResult, taxonomyResult] = await Promise.all([
       this.pool.query<{ data: Recipe }>(
         "SELECT data FROM recipes WHERE user_id = $1 AND revision > $2 AND deleted_at IS NULL",
         [userId, cursorRev],
@@ -285,20 +305,34 @@ export class PostgresAppStore implements AppStore {
         "SELECT COALESCE(current_revision, 0)::text AS rev FROM user_revisions WHERE user_id = $1",
         [userId],
       ),
+      this.pool.query<{ data: Taxonomy; revision: number }>(
+        "SELECT data, revision FROM taxonomy_documents WHERE user_id = $1 AND revision > $2",
+        [userId, taxonomyRevision],
+      ),
     ]);
 
-    return {
-      recipes: recipesResult.rows.map((r) => r.data),
-      deletedIds: deletedResult.rows.map((r) => r.id),
+    const payload: SyncPayload = {
+      recipes: recipesResult.rows.map((row) => row.data),
+      deletedIds: deletedResult.rows.map((row) => row.id),
       cursor: revResult.rows[0]?.rev ?? "0",
     };
+    if ((taxonomyResult.rowCount ?? 0) > 0) {
+      payload.taxonomy = taxonomyResult.rows[0].data;
+      payload.taxonomyRevision = taxonomyResult.rows[0].revision;
+    }
+    return payload;
   }
 
-  async getSyncPayload(userId: string, clientId: string, cursor?: string): Promise<SyncPayload> {
+  async getSyncPayload(
+    userId: string,
+    clientId: string,
+    cursor?: string,
+    taxonomyRevision = 0,
+  ): Promise<SyncPayload> {
     const cursorRev = cursor !== undefined ? parseInt(cursor, 10) : 0;
 
     const [payload] = await Promise.all([
-      this.buildSyncPayload(userId, cursorRev),
+      this.buildSyncPayload(userId, cursorRev, taxonomyRevision),
       this.pool.query(
         `INSERT INTO client_cursors (client_id, user_id, cursor, last_seen_at)
          VALUES ($1, $2, $3, NOW())
@@ -311,9 +345,10 @@ export class PostgresAppStore implements AppStore {
   }
 
   async applyMutations(
-    userId: string, 
-    clientId: string, 
-    mutations: Mutation[]): Promise<SyncPayload> {
+    userId: string,
+    clientId: string,
+    mutations: Mutation[],
+  ): Promise<SyncPayload> {
     const client: PoolClient = await this.pool.connect();
     let finalRevision = 0;
     try {

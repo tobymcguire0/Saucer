@@ -59,10 +59,18 @@ export interface ApiTaxonomy {
   tags: ApiTaxonomyTag[];
 }
 
+export interface ApiTaxonomyDocument {
+  taxonomy: ApiTaxonomy;
+  revision: number;
+  updatedAt: string;
+}
+
 export interface ApiSyncPayload {
   recipes: ApiRecipe[];
   deletedIds: string[];
   cursor: string;
+  taxonomy?: ApiTaxonomy;
+  taxonomyRevision?: number;
 }
 
 export interface ApiBootstrapResponse {
@@ -154,9 +162,20 @@ export class ApiClient {
     return this.request<ApiBootstrapResponse>("GET", "/api/bootstrap");
   }
 
-  async syncChanges(cursor?: string): Promise<ApiSyncPayload> {
-    const query = cursor !== undefined ? `?cursor=${encodeURIComponent(cursor)}` : "";
-    return this.request<ApiSyncPayload>("GET", `/api/sync/changes${query}`);
+  async syncChanges(cursor?: string, taxonomyRevision?: number): Promise<ApiSyncPayload> {
+    const query = new URLSearchParams();
+    if (cursor !== undefined) {
+      query.set("cursor", cursor);
+    }
+    if (taxonomyRevision !== undefined) {
+      query.set("taxonomyRevision", String(taxonomyRevision));
+    }
+    const queryString = query.size > 0 ? `?${query.toString()}` : "";
+    return this.request<ApiSyncPayload>("GET", `/api/sync/changes${queryString}`);
+  }
+
+  async saveTaxonomy(taxonomy: ApiTaxonomy): Promise<ApiTaxonomyDocument> {
+    return this.request<ApiTaxonomyDocument>("PUT", "/api/taxonomy", taxonomy);
   }
 
   async push(mutations: ApiMutation[]): Promise<ApiSyncPayload> {

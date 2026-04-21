@@ -28,17 +28,22 @@ const TEXT_EXTRACTION_PROMPT = `Extract the recipe from this text. Return ONLY a
 
 function parseModelJson(raw: string): unknown {
   // Strip optional markdown code fences the model may emit despite instructions.
-  const stripped = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/, "").trim();
+  const stripped = raw
+    .replace(/^```(?:json)?\n?/i, "")
+    .replace(/\n?```$/, "")
+    .trim();
   return JSON.parse(stripped);
 }
 
 function hasStringMessage(value: unknown): value is { message: string } {
-  const message = typeof value === "object" && value !== null ? Reflect.get(value, "message") : undefined;
+  const message =
+    typeof value === "object" && value !== null ? Reflect.get(value, "message") : undefined;
   return typeof message === "string" && message.trim() !== "";
 }
 
 function hasNumericStatus(value: unknown): value is { status: number } {
-  const status = typeof value === "object" && value !== null ? Reflect.get(value, "status") : undefined;
+  const status =
+    typeof value === "object" && value !== null ? Reflect.get(value, "status") : undefined;
   return typeof status === "number";
 }
 
@@ -47,7 +52,8 @@ function getUpstreamErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  const nestedError = typeof error === "object" && error !== null ? Reflect.get(error, "error") : undefined;
+  const nestedError =
+    typeof error === "object" && error !== null ? Reflect.get(error, "error") : undefined;
   if (hasStringMessage(nestedError)) {
     return nestedError.message;
   }
@@ -152,11 +158,21 @@ export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: Ap
     if (!clientId) return;
 
     const cursor = req.query.cursor as string | undefined;
+    const taxonomyRevision = req.query.taxonomyRevision as string | undefined;
     if (cursor !== undefined && !/^\d+$/.test(cursor)) {
       res.status(400).json({ error: "cursor must be a numeric string." });
       return;
     }
-    const payload = await store.getSyncPayload(req.userId, clientId, cursor);
+    if (taxonomyRevision !== undefined && !/^\d+$/.test(taxonomyRevision)) {
+      res.status(400).json({ error: "taxonomyRevision must be a numeric string." });
+      return;
+    }
+    const payload = await store.getSyncPayload(
+      req.userId,
+      clientId,
+      cursor,
+      taxonomyRevision !== undefined ? parseInt(taxonomyRevision, 10) : undefined,
+    );
     res.json(payload);
   });
 
@@ -195,42 +211,35 @@ export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: Ap
   app.put("/api/taxonomy", requireAuth, async (req, res) => {
     const body = req.body as { categories?: unknown; tags?: unknown };
     if (!Array.isArray(body.categories) || !Array.isArray(body.tags)) {
-      res
-        .status(400)
-        .json({ error: "Taxonomy payload must include categories and tags arrays." });
+      res.status(400).json({ error: "Taxonomy payload must include categories and tags arrays." });
       return;
     }
     const doc = await store.saveTaxonomy(req.userId, body as unknown as Taxonomy);
     res.json(doc);
   });
 
-  app.post(
-    "/api/images/upload",
-    requireAuth,
-    upload.single("image"),
-    async (req, res) => {
-      if (!req.file) {
-        res.status(400).json({ error: "Image upload is required." });
-        return;
-      }
+  app.post("/api/images/upload", requireAuth, upload.single("image"), async (req, res) => {
+    if (!req.file) {
+      res.status(400).json({ error: "Image upload is required." });
+      return;
+    }
 
-      const s3 = new S3Client({ region: process.env.AWS_REGION });
-      const buffer = await sharp(req.file.buffer).jpeg().toBuffer();
-      const key = `images/${req.userId}/${randomUUID()}.jpg`;
-      const bucket = process.env.S3_BUCKET_NAME ?? "saucer-s3";
+    const s3 = new S3Client({ region: process.env.AWS_REGION });
+    const buffer = await sharp(req.file.buffer).jpeg().toBuffer();
+    const key = `images/${req.userId}/${randomUUID()}.jpg`;
+    const bucket = process.env.S3_BUCKET_NAME ?? "saucer-s3";
 
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: key,
-          Body: buffer,
-          ContentType: "image/jpeg",
-        }),
-      );
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: "image/jpeg",
+      }),
+    );
 
-      res.json({ imageUrl: `https://${bucket}.s3.amazonaws.com/${key}` });
-    },
-  );
+    res.json({ imageUrl: `https://${bucket}.s3.amazonaws.com/${key}` });
+  });
 
   app.post("/api/extract-photo", requireAuth, async (req, res) => {
     if (!anthropicApiKey) {
@@ -260,9 +269,9 @@ export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: Ap
     }
 
     const client = new Anthropic({ apiKey: anthropicApiKey });
-    let message;
+    let rawText = "";
     try {
-      message = await client.messages.create({
+      const message = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         messages: [
@@ -282,12 +291,11 @@ export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: Ap
           },
         ],
       });
+      rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
     } catch (error) {
       respondUpstreamFailure(res, "Photo extraction", error);
       return;
     }
-
-    const rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
     try {
       res.json(parseModelJson(rawText));
     } catch {
@@ -314,19 +322,18 @@ export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: Ap
       : `${TEXT_EXTRACTION_PROMPT}\n\n${truncated}`;
 
     const client = new Anthropic({ apiKey: anthropicApiKey });
-    let message;
+    let rawText = "";
     try {
-      message = await client.messages.create({
+      const message = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         messages: [{ role: "user", content: prompt }],
       });
+      rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
     } catch (error) {
       respondUpstreamFailure(res, "Recipe extraction", error);
       return;
     }
-
-    const rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
     try {
       res.json(parseModelJson(rawText));
     } catch {

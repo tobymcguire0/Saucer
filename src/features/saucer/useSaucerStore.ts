@@ -27,6 +27,15 @@ function saveLocalRecipeIds(ids: Set<string>): void {
   localStorage.setItem(LOCAL_IDS_KEY, JSON.stringify([...ids]));
 }
 
+async function syncTaxonomyIfConnected(taxonomy: Taxonomy): Promise<void> {
+  const { useSyncStore } = await import("../sync/useSyncStore");
+  const syncState = useSyncStore.getState();
+  if (!syncState.connected || !syncState.client) {
+    return;
+  }
+  await syncState.saveTaxonomy(taxonomy);
+}
+
 function createInitialState() {
   return {
     recipes: [] as Recipe[],
@@ -40,7 +49,11 @@ function createInitialState() {
 type SaucerStoreState = ReturnType<typeof createInitialState> & {
   initialize: () => Promise<void>;
   bootstrapFromServer: (recipes: Recipe[], taxonomy: Taxonomy) => Promise<void>;
-  mergeServerChanges: (updatedRecipes: Recipe[], deletedIds: string[]) => void;
+  mergeServerChanges: (
+    updatedRecipes: Recipe[],
+    deletedIds: string[],
+    taxonomy?: Taxonomy,
+  ) => Promise<void>;
   replaceAll: (
     recipes: Recipe[],
     taxonomy: Taxonomy,
@@ -100,8 +113,8 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     });
     useStatusStore.getState().updateStatus("Synced with server.", "success");
   },
-  mergeServerChanges: (updatedRecipes, deletedIds) => {
-    const { recipes } = get();
+  mergeServerChanges: async (updatedRecipes, deletedIds, taxonomy) => {
+    const { recipes, taxonomy: currentTaxonomy } = get();
     const updatedMap = new Map(updatedRecipes.map((r) => [r.id, r]));
     const deletedSet = new Set(deletedIds);
     const merged = recipes
@@ -112,7 +125,13 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
         merged.push(r);
       }
     }
-    set({ recipes: merged });
+    const snapshot = await getRecipeStore().replaceAll(merged, taxonomy ?? currentTaxonomy);
+    set({
+      recipes: snapshot.recipes,
+      taxonomy: snapshot.taxonomy,
+      loading: false,
+      initialized: true,
+    });
     get().confirmRecipes(new Set(updatedRecipes.map((r) => r.id)));
   },
   replaceAll: async (recipes, taxonomy, message, tone = "success") => {
@@ -142,9 +161,9 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
   deleteRecipe: async (recipeId) => {
     const { localRecipeIds } = get();
     const { useSyncStore } = await import("../sync/useSyncStore");
-    const connected = useSyncStore.getState().connected;
+    const { connected, cursor } = useSyncStore.getState();
 
-    if (!connected && !localRecipeIds.has(recipeId)) {
+    if (!connected && cursor !== null && !localRecipeIds.has(recipeId)) {
       useStatusStore
         .getState()
         .updateStatus(
@@ -181,16 +200,40 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     const { recipes, taxonomy, replaceAll } = get();
     const nextTaxonomy = upsertCategory(taxonomy, name, description);
     await replaceAll(recipes, nextTaxonomy, "Category saved.");
+    try {
+      await syncTaxonomyIfConnected(nextTaxonomy);
+    } catch (error) {
+      useStatusStore.getState().updateStatus(
+        `Category saved locally, but taxonomy sync failed: ${error instanceof Error ? error.message : "unknown error"}`,
+        "error",
+      );
+    }
   },
   saveTag: async (categoryId, name) => {
     const { recipes, taxonomy, replaceAll } = get();
     const nextTaxonomy = upsertTag(taxonomy, categoryId, name);
     await replaceAll(recipes, nextTaxonomy, "Canonical tag saved.");
+    try {
+      await syncTaxonomyIfConnected(nextTaxonomy);
+    } catch (error) {
+      useStatusStore.getState().updateStatus(
+        `Canonical tag saved locally, but taxonomy sync failed: ${error instanceof Error ? error.message : "unknown error"}`,
+        "error",
+      );
+    }
   },
   saveAlias: async (tagId, alias) => {
     const { recipes, taxonomy, replaceAll } = get();
     const nextTaxonomy = addAlias(taxonomy, tagId, alias);
     await replaceAll(recipes, nextTaxonomy, "Alias saved.");
+    try {
+      await syncTaxonomyIfConnected(nextTaxonomy);
+    } catch (error) {
+      useStatusStore.getState().updateStatus(
+        `Alias saved locally, but taxonomy sync failed: ${error instanceof Error ? error.message : "unknown error"}`,
+        "error",
+      );
+    }
   },
   mergeSelectedTags: async (sourceTagId, targetTagId) => {
     const { recipes, taxonomy, replaceAll } = get();
@@ -200,6 +243,14 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
       merged.taxonomy,
       "Tags merged and recipe assignments updated.",
     );
+    try {
+      await syncTaxonomyIfConnected(merged.taxonomy);
+    } catch (error) {
+      useStatusStore.getState().updateStatus(
+        `Tags merged locally, but taxonomy sync failed: ${error instanceof Error ? error.message : "unknown error"}`,
+        "error",
+      );
+    }
   },
   addDraftTag: async (categoryId, name) => {
     const trimmedName = name.trim();
@@ -211,6 +262,14 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     );
 
     await replaceAll(recipes, nextTaxonomy, `Tag "${trimmedName}" added to the recipe form.`);
+    try {
+      await syncTaxonomyIfConnected(nextTaxonomy);
+    } catch (error) {
+      useStatusStore.getState().updateStatus(
+        `Tag "${trimmedName}" saved locally, but taxonomy sync failed: ${error instanceof Error ? error.message : "unknown error"}`,
+        "error",
+      );
+    }
     return createdTag?.id;
   },
   reset: () => set(createInitialState()),

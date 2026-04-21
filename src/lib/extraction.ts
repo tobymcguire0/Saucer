@@ -214,7 +214,7 @@ type WebsiteImportPayload = {
 
 export type TextExtractor = (text: string, pageTitle?: string) => Promise<ApiPhotoExtraction>;
 
-export async function parseDraftFromWebsiteHtml(
+export function parseDraftFromWebsiteHtml(
   html: string,
   sourceUrl: string,
   extractText?: TextExtractor,
@@ -229,6 +229,7 @@ export async function parseDraftFromWebsiteHtml(
     // JSON-LD is already structured — no need for LLM extraction.
     draft.title = normalizeExtractedText(jsonLdRecipe.name) || "Imported recipe";
     draft.summary = normalizeExtractedText(jsonLdRecipe.description);
+    draft.heroImage = extractImageUrl(jsonLdRecipe.image, sourceUrl) || undefined;
     draft.ingredientsText = normalizeMultilineText(
       (jsonLdRecipe.recipeIngredient ?? []).map((x) => decodeHtmlEntities(String(x))).join("\n"),
     );
@@ -257,20 +258,29 @@ export async function parseDraftFromWebsiteHtml(
     sourceUrl,
   );
   if (extractText) {
-    try {
-      const result = await extractText(document.body.textContent ?? "", document.title);
-      draft.title = result.title || document.title || "Imported recipe";
-      draft.summary = result.summary;
-      draft.ingredientsText = result.ingredients.join("\n");
-      draft.instructionsText = result.instructions.join("\n");
-      draft.servings = result.servings;
-      draft.cuisine = result.cuisine;
-      draft.mealType = result.mealType;
-      draft.heroImage = heroImage || undefined;
-      return draft;
-    } catch {
-      // LLM call failed — fall through to heuristic parsing.
-    }
+    return extractText(document.body.textContent ?? "", document.title)
+      .then((result) => {
+        draft.title = result.title || document.title || "Imported recipe";
+        draft.summary = result.summary;
+        draft.ingredientsText = result.ingredients.join("\n");
+        draft.instructionsText = result.instructions.join("\n");
+        draft.servings = result.servings;
+        draft.cuisine = result.cuisine;
+        draft.mealType = result.mealType;
+        draft.heroImage = heroImage || undefined;
+        return draft;
+      })
+      .catch(() => {
+        // LLM call failed — fall through to heuristic parsing.
+        const fallbackDraft = extractDraftFromPlainText(document.body.textContent ?? "", "website");
+        return {
+          ...fallbackDraft,
+          sourceRef: sourceUrl,
+          title: document.title || fallbackDraft.title,
+          summary: fallbackDraft.summary || "Fallback extraction from page text.",
+          heroImage: heroImage || undefined,
+        };
+      });
   }
 
   const fallbackDraft = extractDraftFromPlainText(document.body.textContent ?? "", "website");
@@ -312,7 +322,7 @@ function normalizeMultilineText(value: string): string {
 
 export async function extractDraftFromWebsite(url: string, extractText?: TextExtractor) {
   const payload = await invoke<WebsiteImportPayload>("fetch_recipe_page", { url });
-  return parseDraftFromWebsiteHtml(payload.html, payload.url || url, extractText);
+  return await parseDraftFromWebsiteHtml(payload.html, payload.url || url, extractText);
 }
 
 function readFileAsText(file: File) {
@@ -394,8 +404,4 @@ export async function extractDraftFromPhotoViaApi(
   draft.sourceRef = file.name;
   draft.heroImage = dataUrl;
   return draft;
-}
-
-async function prepareImage(path){
-  const buffer = await sharp(path).resize.jpeg().toBuffer();
 }

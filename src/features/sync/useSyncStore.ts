@@ -32,56 +32,84 @@ function toClientTaxonomy(t: ApiTaxonomy): Taxonomy {
   };
 }
 
+function mergeTaxonomy(serverTaxonomy: Taxonomy, localTaxonomy: Taxonomy): Taxonomy {
+  const serverCategoryIds = new Set(serverTaxonomy.categories.map((category) => category.id));
+  const serverTagIds = new Set(serverTaxonomy.tags.map((tag) => tag.id));
+
+  return {
+    categories: [
+      ...serverTaxonomy.categories,
+      ...localTaxonomy.categories.filter((category) => !serverCategoryIds.has(category.id)),
+    ],
+    tags: [...serverTaxonomy.tags, ...localTaxonomy.tags.filter((tag) => !serverTagIds.has(tag.id))],
+  };
+}
+
+function hasLocalTaxonomyEntries(serverTaxonomy: Taxonomy, localTaxonomy: Taxonomy): boolean {
+  const serverCategoryIds = new Set(serverTaxonomy.categories.map((category) => category.id));
+  const serverTagIds = new Set(serverTaxonomy.tags.map((tag) => tag.id));
+
+  return (
+    localTaxonomy.categories.some((category) => !serverCategoryIds.has(category.id)) ||
+    localTaxonomy.tags.some((tag) => !serverTagIds.has(tag.id))
+  );
+}
+
 interface SyncState {
   connected: boolean;
   cursor: string | null;
+  taxonomyRevision: number;
   client: ApiClient | null;
   setClient: (client: ApiClient) => void;
   setConnected: (connected: boolean) => void;
+  setTaxonomyRevision: (taxonomyRevision: number) => void;
   bootstrap: () => Promise<void>;
   pullChanges: () => Promise<void>;
   pushMutation: (mutation: ApiMutation) => Promise<void>;
+  saveTaxonomy: (taxonomy: Taxonomy) => Promise<void>;
+  reset: () => void;
+}
+
+function createInitialState() {
+  return {
+    connected: false,
+    cursor: null,
+    taxonomyRevision: 0,
+    client: null as ApiClient | null,
+  };
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
-  connected: false,
-  cursor: null,
-  client: null,
+  ...createInitialState(),
 
   setClient: (client) => set({ client }),
 
   setConnected: (connected) => set({ connected }),
 
+  setTaxonomyRevision: (taxonomyRevision) => set({ taxonomyRevision }),
+
   bootstrap: async () => {
     const { client } = get();
     if (!client) return;
     try {
-      const { recipes: currentRecipes, localRecipeIds } = useSaucerStore.getState();
+      const { recipes: currentRecipes, localRecipeIds, taxonomy: localTaxonomy } = useSaucerStore.getState();
       const localOnlyRecipes = currentRecipes.filter((r) => localRecipeIds.has(r.id));
 
       const payload = await client.bootstrap();
       const serverRecipes = payload.recipes.map(toClientRecipe);
       const serverTaxonomy = toClientTaxonomy(payload.taxonomy);
-
-      // Merge local-only taxonomy items the server doesn't have
-      const { taxonomy: localTaxonomy } = useSaucerStore.getState();
-      const serverCategoryIds = new Set(serverTaxonomy.categories.map((c) => c.id));
-      const serverTagIds = new Set(serverTaxonomy.tags.map((t) => t.id));
-      const mergedTaxonomy: Taxonomy = {
-        categories: [
-          ...serverTaxonomy.categories,
-          ...localTaxonomy.categories.filter((c) => !serverCategoryIds.has(c.id)),
-        ],
-        tags: [
-          ...serverTaxonomy.tags,
-          ...localTaxonomy.tags.filter((t) => !serverTagIds.has(t.id)),
-        ],
-      };
+      const mergedTaxonomy = mergeTaxonomy(serverTaxonomy, localTaxonomy);
 
       const serverIdSet = new Set(serverRecipes.map((r) => r.id));
       const newLocals = localOnlyRecipes.filter((r) => !serverIdSet.has(r.id));
 
       await useSaucerStore.getState().bootstrapFromServer([...serverRecipes, ...newLocals], mergedTaxonomy);
+
+      let nextTaxonomyRevision = payload.taxonomyRevision;
+      if (hasLocalTaxonomyEntries(serverTaxonomy, localTaxonomy)) {
+        const savedTaxonomy = await client.saveTaxonomy(mergedTaxonomy);
+        nextTaxonomyRevision = savedTaxonomy.revision;
+      }
 
       useSaucerStore.getState().confirmRecipes(serverIdSet);
 
@@ -94,35 +122,67 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         });
       }
 
-      set({ connected: true, cursor: payload.cursor });
+      set({ connected: true, cursor: payload.cursor, taxonomyRevision: nextTaxonomyRevision });
     } catch {
       set({ connected: false });
     }
   },
 
   pullChanges: async () => {
-    const { client, cursor } = get();
+    const { client, cursor, taxonomyRevision } = get();
     if (!client || cursor === null) return;
     try {
-      const payload = await client.syncChanges(cursor);
-      if (payload.recipes.length > 0 || payload.deletedIds.length > 0) {
+      const payload = await client.syncChanges(cursor, taxonomyRevision);
+      const nextTaxonomy = payload.taxonomy ? toClientTaxonomy(payload.taxonomy) : undefined;
+      if (payload.recipes.length > 0 || payload.deletedIds.length > 0 || nextTaxonomy) {
         const updatedRecipes = payload.recipes.map(toClientRecipe);
-        useSaucerStore.getState().mergeServerChanges(updatedRecipes, payload.deletedIds);
+        await useSaucerStore.getState().mergeServerChanges(updatedRecipes, payload.deletedIds, nextTaxonomy);
       }
-      set({ connected: true, cursor: payload.cursor });
+      set({
+        connected: true,
+        cursor: payload.cursor,
+        taxonomyRevision: payload.taxonomyRevision ?? taxonomyRevision,
+      });
     } catch {
       set({ connected: false });
     }
   },
 
   pushMutation: async (mutation) => {
-    const { client } = get();
+    const { client, taxonomyRevision } = get();
     if (!client) return;
     try {
       const payload = await client.push([mutation]);
-      set({ connected: true, cursor: payload.cursor });
+      const nextTaxonomy = payload.taxonomy ? toClientTaxonomy(payload.taxonomy) : undefined;
+      if (payload.recipes.length > 0 || payload.deletedIds.length > 0 || nextTaxonomy) {
+        const updatedRecipes = payload.recipes.map(toClientRecipe);
+        await useSaucerStore.getState().mergeServerChanges(updatedRecipes, payload.deletedIds, nextTaxonomy);
+      }
+      set({
+        connected: true,
+        cursor: payload.cursor,
+        taxonomyRevision: payload.taxonomyRevision ?? taxonomyRevision,
+      });
     } catch {
       set({ connected: false });
     }
   },
+
+  saveTaxonomy: async (taxonomy) => {
+    const { client } = get();
+    if (!client) return;
+    try {
+      const savedTaxonomy = await client.saveTaxonomy(taxonomy);
+      set({ connected: true, taxonomyRevision: savedTaxonomy.revision });
+    } catch (error) {
+      set({ connected: false });
+      throw error;
+    }
+  },
+
+  reset: () => set(createInitialState()),
 }));
+
+export function resetSyncStore() {
+  useSyncStore.getState().reset();
+}

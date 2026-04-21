@@ -155,6 +155,21 @@ describe("createApp", () => {
     });
   });
 
+  it("returns taxonomy updates from sync changes when the client revision is stale", async () => {
+    const { store, getSyncPayload, taxonomyDocument, syncPayload } = createStoreStub();
+    syncPayload.taxonomy = taxonomyDocument.taxonomy;
+    syncPayload.taxonomyRevision = taxonomyDocument.revision;
+
+    const response = await request(createApp({ store, verifyToken, fetchImpl }))
+      .get("/api/sync/changes?cursor=7&taxonomyRevision=1")
+      .set("Authorization", "Bearer good-token")
+      .set("X-Client-Id", "device-abc")
+      .expect(200);
+
+    expect(getSyncPayload).toHaveBeenCalledWith("user-123", "device-abc", "7", 1);
+    expect(response.body).toEqual(syncPayload);
+  });
+
   it("rejects invalid sync cursors", async () => {
     const { store, getSyncPayload } = createStoreStub();
 
@@ -163,6 +178,18 @@ describe("createApp", () => {
       .set("Authorization", "Bearer good-token")
       .set("X-Client-Id", "device-abc")
       .expect(400, { error: "cursor must be a numeric string." });
+
+    expect(getSyncPayload).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid taxonomy revisions in sync requests", async () => {
+    const { store, getSyncPayload } = createStoreStub();
+
+    await request(createApp({ store, verifyToken, fetchImpl }))
+      .get("/api/sync/changes?taxonomyRevision=not-a-number")
+      .set("Authorization", "Bearer good-token")
+      .set("X-Client-Id", "device-abc")
+      .expect(400, { error: "taxonomyRevision must be a numeric string." });
 
     expect(getSyncPayload).not.toHaveBeenCalled();
   });
@@ -251,7 +278,9 @@ describe("createApp", () => {
       ],
     });
 
-    const response = await request(createApp({ store, verifyToken, fetchImpl, anthropicApiKey: "test-key" }))
+    const response = await request(
+      createApp({ store, verifyToken, fetchImpl, anthropicApiKey: "test-key" }),
+    )
       .post("/api/extract-photo")
       .set("Authorization", "Bearer good-token")
       .send({ imageDataUrl: VALID_IMAGE_DATA_URL })

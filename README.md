@@ -85,9 +85,6 @@ Browser or Tauri app (React 19 + TypeScript + Vite)
         │
         ▼
    PostgreSQL (recipes, mutations, sync cursors, taxonomy)
-        │
-        ▼
-    AWS S3 (hero images)
 ```
 
 **Frontend** (`src/`) — React 19 + TypeScript + Vite. State in Zustand stores under `src/features/`. Domain logic (models, taxonomy, persistence, search) in `src/lib/`.
@@ -139,7 +136,6 @@ The production server currently runs at `api.tobymcguire.net` via Docker Compose
 
 - PostgreSQL (managed by Docker Compose)
 - AWS Cognito credentials for JWT verification
-- AWS S3 credentials for hero image storage
 - TLS certificate from Let's Encrypt (via certbot + Cloudflare DNS plugin)
 
 ## Project structure

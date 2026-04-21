@@ -1,9 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import Anthropic from "@anthropic-ai/sdk";
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
-import multer from "multer";
 import sharp from "sharp";
 import type { AppStore } from "./store.js";
 import type { Mutation, Taxonomy } from "./types.js";
@@ -97,8 +95,6 @@ interface AppConfig {
   fetchImpl: FetchImpl;
   anthropicApiKey?: string;
 }
-
-const upload = multer({ storage: multer.memoryStorage() });
 
 export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: AppConfig) {
   const app = express();
@@ -216,29 +212,6 @@ export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: Ap
     }
     const doc = await store.saveTaxonomy(req.userId, body as unknown as Taxonomy);
     res.json(doc);
-  });
-
-  app.post("/api/images/upload", requireAuth, upload.single("image"), async (req, res) => {
-    if (!req.file) {
-      res.status(400).json({ error: "Image upload is required." });
-      return;
-    }
-
-    const s3 = new S3Client({ region: process.env.AWS_REGION });
-    const buffer = await sharp(req.file.buffer).jpeg().toBuffer();
-    const key = `images/${req.userId}/${randomUUID()}.jpg`;
-    const bucket = process.env.S3_BUCKET_NAME ?? "saucer-s3";
-
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: buffer,
-        ContentType: "image/jpeg",
-      }),
-    );
-
-    res.json({ imageUrl: `https://${bucket}.s3.amazonaws.com/${key}` });
   });
 
   app.post("/api/extract-photo", requireAuth, async (req, res) => {

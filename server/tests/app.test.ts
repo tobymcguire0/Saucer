@@ -221,15 +221,6 @@ describe("createApp", () => {
     expect(saveTaxonomy).not.toHaveBeenCalled();
   });
 
-  it("requires an uploaded image file", async () => {
-    const { store } = createStoreStub();
-
-    await request(createApp({ store, verifyToken, fetchImpl }))
-      .post("/api/images/upload")
-      .set("Authorization", "Bearer good-token")
-      .expect(400, { error: "Image upload is required." });
-  });
-
   it("rejects photo extraction requests with invalid image payloads", async () => {
     const { store } = createStoreStub();
 

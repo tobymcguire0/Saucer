@@ -83,6 +83,27 @@ export interface ApiPhotoExtraction {
   mealType: string;
 }
 
+async function readErrorMessage(res: Response): Promise<string> {
+  const raw = (await res.text()).trim();
+  if (!raw) {
+    return res.statusText || `Request failed with status ${res.status}.`;
+  }
+
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      const payload = JSON.parse(raw) as { error?: unknown };
+      if (typeof payload.error === "string" && payload.error.trim() !== "") {
+        return payload.error;
+      }
+    } catch {
+      return raw;
+    }
+  }
+
+  return raw;
+}
+
 export class ApiClient {
   constructor(private getToken: () => string | null) {}
 
@@ -95,15 +116,29 @@ export class ApiClient {
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    const res = await fetch(`${BASE_URL}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    const url = `${BASE_URL}${path}`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    } catch (error) {
+      throw new Error(
+        `Network request to ${url} failed: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
     }
-    return res.json() as Promise<T>;
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${await readErrorMessage(res)}`);
+    }
+    try {
+      return (await res.json()) as T;
+    } catch (error) {
+      throw new Error(
+        `Invalid JSON response from ${path}: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+    }
   }
 
   async health(): Promise<boolean> {

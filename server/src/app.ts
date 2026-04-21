@@ -32,6 +32,48 @@ function parseModelJson(raw: string): unknown {
   return JSON.parse(stripped);
 }
 
+function hasStringMessage(value: unknown): value is { message: string } {
+  const message = typeof value === "object" && value !== null ? Reflect.get(value, "message") : undefined;
+  return typeof message === "string" && message.trim() !== "";
+}
+
+function hasNumericStatus(value: unknown): value is { status: number } {
+  const status = typeof value === "object" && value !== null ? Reflect.get(value, "status") : undefined;
+  return typeof status === "number";
+}
+
+function getUpstreamErrorMessage(error: unknown): string {
+  if (hasStringMessage(error)) {
+    return error.message;
+  }
+
+  const nestedError = typeof error === "object" && error !== null ? Reflect.get(error, "error") : undefined;
+  if (hasStringMessage(nestedError)) {
+    return nestedError.message;
+  }
+
+  return "Unknown upstream error.";
+}
+
+function getUpstreamStatus(error: unknown): number | undefined {
+  if (hasNumericStatus(error)) {
+    return error.status;
+  }
+
+  return undefined;
+}
+
+function respondUpstreamFailure(res: Response, operation: string, error: unknown): void {
+  const providerStatus = getUpstreamStatus(error);
+  const payload: { error: string; providerStatus?: number } = {
+    error: `${operation} failed: ${getUpstreamErrorMessage(error)}`,
+  };
+  if (providerStatus !== undefined) {
+    payload.providerStatus = providerStatus;
+  }
+  res.status(providerStatus === 429 ? 503 : 502).json(payload);
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -206,28 +248,44 @@ export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: Ap
     const base64 = imageDataUrl.slice(commaIndex + 1);
 
     // Resize to ≤1024px wide before sending to reduce token count and cost.
-    const resizedBuffer = await sharp(Buffer.from(base64, "base64"))
-      .resize({ width: 1024, withoutEnlargement: true })
-      .jpeg({ quality: 85 })
-      .toBuffer();
+    let resizedBuffer: Buffer;
+    try {
+      resizedBuffer = await sharp(Buffer.from(base64, "base64"))
+        .resize({ width: 1024, withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+    } catch {
+      res.status(400).json({ error: "imageDataUrl must contain a valid image." });
+      return;
+    }
 
     const client = new Anthropic({ apiKey: anthropicApiKey });
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: "image/jpeg", data: resizedBuffer.toString("base64") },
-            },
-            { type: "text", text: EXTRACTION_PROMPT },
-          ],
-        },
-      ],
-    });
+    let message;
+    try {
+      message = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/jpeg",
+                  data: resizedBuffer.toString("base64"),
+                },
+              },
+              { type: "text", text: EXTRACTION_PROMPT },
+            ],
+          },
+        ],
+      });
+    } catch (error) {
+      respondUpstreamFailure(res, "Photo extraction", error);
+      return;
+    }
 
     const rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
     try {
@@ -256,11 +314,17 @@ export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: Ap
       : `${TEXT_EXTRACTION_PROMPT}\n\n${truncated}`;
 
     const client = new Anthropic({ apiKey: anthropicApiKey });
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
-    });
+    let message;
+    try {
+      message = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: prompt }],
+      });
+    } catch (error) {
+      respondUpstreamFailure(res, "Recipe extraction", error);
+      return;
+    }
 
     const rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
     try {

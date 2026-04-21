@@ -155,6 +155,7 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
     try {
       const { useSyncStore } = await import("../sync/useSyncStore");
       const { client: syncClient, connected } = useSyncStore.getState();
+      const connectedClient = connected ? syncClient : null;
 
       if (!connected) {
         set({ uploadErrorActive: true, uploadShakeActive: true });
@@ -162,8 +163,8 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
         setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
       }
 
-      const extractText = syncClient
-        ? (text: string, pageTitle?: string) => syncClient.extractRecipeText(text, pageTitle)
+      const extractText = connectedClient
+        ? (text: string, pageTitle?: string) => connectedClient.extractRecipeText(text, pageTitle)
         : undefined;
 
       const importedDraft = await importRecipeDraftFromWebsite(draft.sourceRef, extractText);
@@ -201,6 +202,7 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
     try {
       const { useSyncStore } = await import("../sync/useSyncStore");
       const { client: syncClient, connected } = useSyncStore.getState();
+      const connectedClient = connected ? syncClient : null;
 
       if (!connected) {
         set({ uploadErrorActive: true, uploadShakeActive: true });
@@ -208,11 +210,11 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
         setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
       }
 
-      const extractPhoto = syncClient
-        ? (dataUrl: string) => syncClient.extractPhoto(dataUrl)
+      const extractPhoto = connectedClient
+        ? (dataUrl: string) => connectedClient.extractPhoto(dataUrl)
         : undefined;
-      const extractText = syncClient
-        ? (text: string) => syncClient.extractRecipeText(text)
+      const extractText = connectedClient
+        ? (text: string) => connectedClient.extractRecipeText(text)
         : undefined;
 
       let importedDraft: RecipeDraft;

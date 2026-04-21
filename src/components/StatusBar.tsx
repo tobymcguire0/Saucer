@@ -7,10 +7,10 @@ function StatusBar() {
   const connected = useSyncStore((s) => s.connected);
   const toneClass =
     statusTone === "success"
-      ? "border-panel-60 bg-panel-50 text-background-0"
+      ? "border-panel-60 bg-panel-70 text-background-0"
       : statusTone === "error"
-        ? "border-accent-60 bg-accent-50 text-background-0"
-        : "border-primary-20 bg-background-0 text-text-60";
+        ? "border-accent-60 bg-accent-70 text-background-0"
+        : "border-primary-20 bg-background-30 text-text-60";
 
   return (
     <div

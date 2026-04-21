@@ -36,11 +36,11 @@ export type ThemeScale = Record<ThemeScaleStep, string>;
 export type ThemeTokens = Record<ThemeFamily, ThemeScale>;
 
 export const defaultThemePalette: ThemePalette = {
-  primary: "rgb(4, 183, 18)",
-  accent: "rgb(135, 252, 114)",
-  background: "rgb(37, 37, 37)",
-  panel: "rgb(60, 60, 60)",
-  text: "rgb(21, 20, 31)",
+  primary: "#F97316",
+  accent: "#61cc4f",
+  background: "#CCFBF1",
+  panel: "#0F766E",
+  text: "#12343B",
 };
 
 function getLocalStorage() {

@@ -33,7 +33,6 @@ function RecipeEditorModal() {
     taxonomy,
     taxonomyGroups,
     categoryLookup,
-    mealTimeCategory,
   } = useRecipeEditorModalViewModel();
 
   if (!editorOpen) {
@@ -107,12 +106,6 @@ function RecipeEditorModal() {
             <button type="button" className="btn-primary" onClick={() => void saveDraft()}>
               {editorMode === "edit" ? "Save recipe" : "Create recipe"}
             </button>
-            {mealTimeCategory ? (
-              <span className="text-sm text-text-35">
-                Group browsing is ready for {mealTimeCategory.name.toLowerCase()} and every other
-                category.
-              </span>
-            ) : null}
           </div>
         ) : null}
       </section>

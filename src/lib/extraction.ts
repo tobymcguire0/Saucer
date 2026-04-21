@@ -217,17 +217,19 @@ export function parseDraftFromWebsiteHtml(html: string, sourceUrl: string) {
   const jsonLdRecipe = extractJsonLdRecipe(document);
 
   if (jsonLdRecipe) {
-    draft.title = toText(jsonLdRecipe.name) || "Imported recipe";
-    draft.summary = toText(jsonLdRecipe.description);
-    draft.heroImage = extractImageUrl(jsonLdRecipe.image, sourceUrl);
-    draft.ingredientsText = jsonLdRecipe.recipeIngredient?.join("\n") ?? "";
-    draft.instructionsText = Array.isArray(jsonLdRecipe.recipeInstructions)
-      ? jsonLdRecipe.recipeInstructions
-          .map((step) => (typeof step === "string" ? step : step.text ?? ""))
-          .filter(Boolean)
-          .join("\n")
-      : jsonLdRecipe.recipeInstructions ?? "";
-    draft.servings = toText(jsonLdRecipe.recipeYield);
+    draft.title = normalizeExtractedText(jsonLdRecipe.name) || "Imported recipe";
+    draft.summary = normalizeExtractedText(jsonLdRecipe.description);
+    draft.ingredientsText = normalizeMultilineText(
+      (jsonLdRecipe.recipeIngredient ?? []).map((x) => decodeHtmlEntities(String(x))).join("\n"),
+    );
+    draft.instructionsText = normalizeMultilineText(
+      Array.isArray(jsonLdRecipe.recipeInstructions)
+        ? jsonLdRecipe.recipeInstructions
+            .map((step) => (typeof step === "string" ? step : step.text ?? ""))
+            .join("\n")
+        : String(jsonLdRecipe.recipeInstructions ?? ""),
+    );
+    draft.servings = normalizeExtractedText(jsonLdRecipe.recipeYield);
     draft.cuisine =
       inferFromKeywords(jsonLdRecipe.recipeCuisine, cuisineHints) ||
       toText(jsonLdRecipe.recipeCuisine) ||
@@ -250,6 +252,33 @@ export function parseDraftFromWebsiteHtml(html: string, sourceUrl: string) {
       sourceUrl,
     ),
   };
+}
+
+function decodeHtmlEntities(value: string): string {
+  if (!value || !value.includes("&")) return value;
+
+  // Decode up to 3 passes to handle double-encoded content like &amp;frac12;
+  let current = value;
+  for (let i = 0; i < 3; i += 1) {
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = current;
+    const decoded = textarea.value;
+    if (decoded === current) break;
+    current = decoded;
+  }
+  return current;
+}
+
+function normalizeExtractedText(value: unknown): string {
+  return decodeHtmlEntities(toText(value)).trim();
+}
+
+function normalizeMultilineText(value: string): string {
+  return value
+    .split("\n")
+    .map((line) => decodeHtmlEntities(line).trimEnd())
+    .join("\n")
+    .trim();
 }
 
 export async function extractDraftFromWebsite(url: string) {

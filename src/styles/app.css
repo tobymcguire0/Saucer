@@ -12,115 +12,115 @@
 @theme {
   --font-sans: Inter, "Segoe UI", sans-serif;
 
-  --color-primary-0: #ecf9f8;
-  --color-primary-5: #d7f3f0;
-  --color-primary-10: #c1ece8;
-  --color-primary-15: #abe6df;
-  --color-primary-20: #96dfd7;
-  --color-primary-25: #80d9cf;
-  --color-primary-30: #6ad2c7;
-  --color-primary-35: #55ccbf;
-  --color-primary-40: #3fc5b6;
-  --color-primary-45: #2abfae;
-  --color-primary-50: #14b8a6;
-  --color-primary-55: #12a897;
-  --color-primary-60: #109889;
-  --color-primary-65: #0f877a;
-  --color-primary-70: #0d776c;
-  --color-primary-75: #0b675d;
-  --color-primary-80: #09574e;
-  --color-primary-85: #084740;
-  --color-primary-90: #063631;
-  --color-primary-95: #042623;
-  --color-primary-100: #021614;
+  --color-primary-0: #f1f5f2;
+  --color-primary-5: #e0e8e2;
+  --color-primary-10: #cfdcd3;
+  --color-primary-15: #bfd0c4;
+  --color-primary-20: #aec4b5;
+  --color-primary-25: #9db8a5;
+  --color-primary-30: #8dac96;
+  --color-primary-35: #7ca087;
+  --color-primary-40: #6b9478;
+  --color-primary-45: #5b8868;
+  --color-primary-50: #4a7c59;
+  --color-primary-55: #437151;
+  --color-primary-60: #3d6649;
+  --color-primary-65: #365b42;
+  --color-primary-70: #30503a;
+  --color-primary-75: #294532;
+  --color-primary-80: #233b2a;
+  --color-primary-85: #1c3022;
+  --color-primary-90: #16251a;
+  --color-primary-95: #0f1a13;
+  --color-primary-100: #090f0b;
 
-  --color-accent-0: #fff4ec;
-  --color-accent-5: #fee7d7;
-  --color-accent-10: #fddac1;
-  --color-accent-15: #fdcdac;
-  --color-accent-20: #fcc097;
-  --color-accent-25: #fcb381;
-  --color-accent-30: #fba76c;
-  --color-accent-35: #fb9a56;
-  --color-accent-40: #fa8d41;
-  --color-accent-45: #fa802b;
-  --color-accent-50: #f97316;
-  --color-accent-55: #e36914;
-  --color-accent-60: #cd5f12;
-  --color-accent-65: #b75510;
-  --color-accent-70: #a14b0e;
-  --color-accent-75: #8b400c;
-  --color-accent-80: #76360a;
-  --color-accent-85: #602c08;
-  --color-accent-90: #4a2207;
-  --color-accent-95: #341805;
-  --color-accent-100: #1e0e03;
+  --color-accent-0: #fdf2ee;
+  --color-accent-5: #fbe4da;
+  --color-accent-10: #f9d6c7;
+  --color-accent-15: #f7c7b3;
+  --color-accent-20: #f5b9a0;
+  --color-accent-25: #f3aa8c;
+  --color-accent-30: #f09c78;
+  --color-accent-35: #ee8d65;
+  --color-accent-40: #ec7f51;
+  --color-accent-45: #ea703e;
+  --color-accent-50: #e8622a;
+  --color-accent-55: #d45926;
+  --color-accent-60: #bf5123;
+  --color-accent-65: #ab481f;
+  --color-accent-70: #96401b;
+  --color-accent-75: #823718;
+  --color-accent-80: #6e2e14;
+  --color-accent-85: #592610;
+  --color-accent-90: #451d0c;
+  --color-accent-95: #301409;
+  --color-accent-100: #1c0c05;
 
-  --color-background-0: #fbfffe;
-  --color-background-5: #f6fefd;
-  --color-background-10: #f2fefb;
-  --color-background-15: #edfefa;
-  --color-background-20: #e8fdf9;
-  --color-background-25: #e3fdf7;
-  --color-background-30: #dffcf6;
-  --color-background-35: #dafcf5;
-  --color-background-40: #d5fcf4;
-  --color-background-45: #d1fbf2;
-  --color-background-50: #ccfbf1;
-  --color-background-55: #bae5dc;
-  --color-background-60: #a8cfc7;
-  --color-background-65: #96b9b1;
-  --color-background-70: #84a39c;
-  --color-background-75: #728d87;
-  --color-background-80: #607672;
-  --color-background-85: #4e605d;
-  --color-background-90: #3c4a47;
-  --color-background-95: #2a3432;
-  --color-background-100: #181e1d;
+  --color-background-0: #fffefe;
+  --color-background-5: #fefefd;
+  --color-background-10: #fefdfc;
+  --color-background-15: #fdfcfb;
+  --color-background-20: #fdfbfa;
+  --color-background-25: #fcfbf9;
+  --color-background-30: #fcfaf8;
+  --color-background-35: #fbf9f7;
+  --color-background-40: #fbf8f6;
+  --color-background-45: #faf8f5;
+  --color-background-50: #faf7f4;
+  --color-background-55: #e4e1df;
+  --color-background-60: #ceccc9;
+  --color-background-65: #b8b6b4;
+  --color-background-70: #a2a09e;
+  --color-background-75: #8c8a89;
+  --color-background-80: #767573;
+  --color-background-85: #605f5e;
+  --color-background-90: #4a4948;
+  --color-background-95: #343333;
+  --color-background-100: #1e1e1d;
 
-  --color-panel-0: #ecf4f3;
-  --color-panel-5: #d6e7e6;
-  --color-panel-10: #c0dbd9;
-  --color-panel-15: #aacecb;
-  --color-panel-20: #93c2be;
-  --color-panel-25: #7db5b1;
-  --color-panel-30: #67a8a3;
-  --color-panel-35: #519c96;
-  --color-panel-40: #3b8f89;
-  --color-panel-45: #25837b;
-  --color-panel-50: #0f766e;
-  --color-panel-55: #0e6c64;
-  --color-panel-60: #0c615b;
-  --color-panel-65: #0b5751;
-  --color-panel-70: #0a4c47;
-  --color-panel-75: #08423e;
-  --color-panel-80: #073834;
-  --color-panel-85: #062d2a;
-  --color-panel-90: #042321;
-  --color-panel-95: #031917;
-  --color-panel-100: #020e0d;
+  --color-panel-0: #f1f0ef;
+  --color-panel-5: #e0dedc;
+  --color-panel-10: #cfcdca;
+  --color-panel-15: #bfbbb7;
+  --color-panel-20: #aea9a5;
+  --color-panel-25: #9d9892;
+  --color-panel-30: #8d867f;
+  --color-panel-35: #7c756d;
+  --color-panel-40: #6b635a;
+  --color-panel-45: #5b5248;
+  --color-panel-50: #4a4035;
+  --color-panel-55: #433a30;
+  --color-panel-60: #3d352c;
+  --color-panel-65: #362f27;
+  --color-panel-70: #302922;
+  --color-panel-75: #29241e;
+  --color-panel-80: #231e19;
+  --color-panel-85: #1c1914;
+  --color-panel-90: #161310;
+  --color-panel-95: #0f0d0b;
+  --color-panel-100: #090806;
 
-  --color-text-0: #ecefef;
-  --color-text-5: #d6dcdd;
-  --color-text-10: #c0c9cb;
-  --color-text-15: #abb7b9;
-  --color-text-20: #95a4a7;
-  --color-text-25: #7f9195;
-  --color-text-30: #697f83;
-  --color-text-35: #536c71;
-  --color-text-40: #3e595f;
-  --color-text-45: #28474d;
-  --color-text-50: #12343b;
-  --color-text-55: #102f36;
-  --color-text-60: #0f2b31;
-  --color-text-65: #0d262b;
-  --color-text-70: #0c2226;
-  --color-text-75: #0a1d21;
-  --color-text-80: #08191c;
-  --color-text-85: #071417;
-  --color-text-90: #050f11;
-  --color-text-95: #040b0c;
-  --color-text-100: #020607;
+  --color-text-0: #eeedec;
+  --color-text-5: #dbd8d7;
+  --color-text-10: #c7c4c1;
+  --color-text-15: #b4afab;
+  --color-text-20: #a09b96;
+  --color-text-25: #8d8680;
+  --color-text-30: #7a716a;
+  --color-text-35: #665d55;
+  --color-text-40: #53483f;
+  --color-text-45: #3f342a;
+  --color-text-50: #2c1f14;
+  --color-text-55: #281c12;
+  --color-text-60: #241a10;
+  --color-text-65: #20170f;
+  --color-text-70: #1d140d;
+  --color-text-75: #19110b;
+  --color-text-80: #150f09;
+  --color-text-85: #110c08;
+  --color-text-90: #0d0906;
+  --color-text-95: #090604;
+  --color-text-100: #050402;
 
   --animate-shake: shake 0.5s ease-in-out;
 }
@@ -192,20 +192,20 @@
 
   .btn-primary {
     border-color: var(--color-primary-60);
-    background: var(--color-accent-40);
+    background: var(--color-primary-50);
     color: var(--color-background-0);
-    box-shadow: 0 12px 24px color-mix(in srgb, var(--color-primary-70) 22%, transparent);
+    box-shadow: 0 12px 24px color-mix(in srgb, var(--color-primary-70) 28%, transparent);
   }
 
   .btn-primary:hover:not(:disabled) {
     transform: translateY(-1px);
-    border-color: var(--color-primary-65);
-    background: var(--color-accent-50);
+    border-color: var(--color-primary-70);
+    background: var(--color-primary-55);
   }
 
   .btn-primary:active:not(:disabled) {
     transform: translateY(0);
-    background: var(--color-primary-60);
+    background: var(--color-primary-65);
   }
 
   .btn-secondary {
@@ -293,6 +293,25 @@
       background-color 150ms ease;
   }
 
+  .file-input input{
+    display:none;
+  }
+
+  .file-input label{
+    cursor:pointer;
+    display:block;
+    padding: 0.8rem 0.95rem;
+    margin: .5rem 0;
+    color: var(--color-text-70);
+    border-radius: var(--radius-control);
+    border: 1px solid var(--color-panel-20);
+    background: var(--color-background-30);
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      background-color 150ms ease;
+  }
+
   .field-input::placeholder,
   .field-textarea::placeholder {
     color: var(--color-text-30);
@@ -302,8 +321,8 @@
   .field-select:focus,
   .field-textarea:focus {
     outline: none;
-    border-color: var(--color-accent-35);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent-20) 60%, transparent);
+    border-color: var(--color-primary-40);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary-20) 60%, transparent);
   }
 
   .field-select {

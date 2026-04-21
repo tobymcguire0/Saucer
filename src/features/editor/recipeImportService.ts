@@ -1,7 +1,10 @@
+import type { ApiPhotoExtraction } from "../../lib/apiClient";
 import {
   extractDraftFromPhoto,
+  extractDraftFromPhotoViaApi,
   extractDraftFromTextFile,
   extractDraftFromWebsite,
+  type TextExtractor,
 } from "../../lib/extraction";
 import type { SourceType } from "../../lib/models";
 
@@ -25,10 +28,21 @@ export function normalizeWebsiteImportUrl(value: string) {
   return parsed.toString();
 }
 
-export async function importRecipeDraftFromWebsite(value: string) {
-  return extractDraftFromWebsite(normalizeWebsiteImportUrl(value));
+export async function importRecipeDraftFromWebsite(value: string, extractText?: TextExtractor) {
+  return extractDraftFromWebsite(normalizeWebsiteImportUrl(value), extractText);
 }
 
-export async function importRecipeDraftFromFile(file: File, sourceType: SourceType) {
-  return sourceType === "photo" ? extractDraftFromPhoto(file) : extractDraftFromTextFile(file);
+export async function importRecipeDraftFromFile(
+  file: File,
+  sourceType: SourceType,
+  extractPhoto?: (dataUrl: string) => Promise<ApiPhotoExtraction>,
+  extractText?: TextExtractor,
+) {
+  if (sourceType === "photo") {
+    if (extractPhoto) {
+      return extractDraftFromPhotoViaApi(file, extractPhoto);
+    }
+    return extractDraftFromPhoto(file);
+  }
+  return extractDraftFromTextFile(file, extractText);
 }

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultTaxonomy } from "../src/lib/defaultTaxonomy";
 import type { Recipe, Taxonomy } from "../src/lib/models";
-import { ObsidianRecipeStore } from "../src/lib/persistence";
+import { ObsidianRecipeStore } from "../src/lib/persistence/obsidianStore";
 
 vi.mock("../src/lib/searchIndex", () => ({
   SqliteSearchIndex: class {

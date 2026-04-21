@@ -54,9 +54,7 @@ function AppSidebar() {
           toggleFilterTag={toggleFilterTag}
           sidebarTagSearchKey="__all__"
         />
-        <div className="xl:mt-auto">
-          <ThemePalettePanel />
-        </div>
+        <ThemePalettePanel />
       </aside>
     );
   }

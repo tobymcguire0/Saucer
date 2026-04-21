@@ -57,6 +57,8 @@ export interface SyncPayload {
   recipes: Recipe[];
   deletedIds: string[];
   cursor: string;
+  taxonomy?: Taxonomy;
+  taxonomyRevision?: number;
 }
 
 export interface UpsertRecipeMutation {

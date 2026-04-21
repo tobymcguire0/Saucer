@@ -6,7 +6,7 @@ type SidebarHeaderProps = {
 
 function SidebarHeader({ username, onLogout, onUploadRecipe }: SidebarHeaderProps) {
   return (
-    <div className="rounded-[var(--radius-card)] border border-panel-15 bg-background-0 p-5 shadow-[var(--shadow-panel)]">
+    <div className="rounded-[var(--radius-card)] border border-panel-80 bg-panel-15 p-5 shadow-[var(--shadow-panel)]">
       <h1 className="text-3xl font-semibold tracking-tight text-text-60">
         {username ? `${username}'s Saucer` : "Saucer"}
       </h1>

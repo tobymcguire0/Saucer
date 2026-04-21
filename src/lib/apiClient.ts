@@ -1,5 +1,7 @@
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
 
+// Stable per-device identity sent with every request so the server can attribute
+// mutations and avoid echoing a client's own changes back during sync.
 function getOrCreateClientId(): string {
   const key = "saucer:clientId";
   let id = localStorage.getItem(key);
@@ -57,10 +59,18 @@ export interface ApiTaxonomy {
   tags: ApiTaxonomyTag[];
 }
 
+export interface ApiTaxonomyDocument {
+  taxonomy: ApiTaxonomy;
+  revision: number;
+  updatedAt: string;
+}
+
 export interface ApiSyncPayload {
   recipes: ApiRecipe[];
   deletedIds: string[];
   cursor: string;
+  taxonomy?: ApiTaxonomy;
+  taxonomyRevision?: number;
 }
 
 export interface ApiBootstrapResponse {
@@ -69,6 +79,37 @@ export interface ApiBootstrapResponse {
   cursor: string;
   taxonomy: ApiTaxonomy;
   taxonomyRevision: number;
+}
+
+export interface ApiPhotoExtraction {
+  title: string;
+  summary: string;
+  ingredients: string[];
+  instructions: string[];
+  servings: string;
+  cuisine: string;
+  mealType: string;
+}
+
+async function readErrorMessage(res: Response): Promise<string> {
+  const raw = (await res.text()).trim();
+  if (!raw) {
+    return res.statusText || `Request failed with status ${res.status}.`;
+  }
+
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      const payload = JSON.parse(raw) as { error?: unknown };
+      if (typeof payload.error === "string" && payload.error.trim() !== "") {
+        return payload.error;
+      }
+    } catch {
+      return raw;
+    }
+  }
+
+  return raw;
 }
 
 export class ApiClient {
@@ -83,15 +124,29 @@ export class ApiClient {
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    const res = await fetch(`${BASE_URL}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    const url = `${BASE_URL}${path}`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    } catch (error) {
+      throw new Error(
+        `Network request to ${url} failed: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
     }
-    return res.json() as Promise<T>;
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${await readErrorMessage(res)}`);
+    }
+    try {
+      return (await res.json()) as T;
+    } catch (error) {
+      throw new Error(
+        `Invalid JSON response from ${path}: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+    }
   }
 
   async health(): Promise<boolean> {
@@ -107,12 +162,31 @@ export class ApiClient {
     return this.request<ApiBootstrapResponse>("GET", "/api/bootstrap");
   }
 
-  async syncChanges(cursor?: string): Promise<ApiSyncPayload> {
-    const query = cursor !== undefined ? `?cursor=${encodeURIComponent(cursor)}` : "";
-    return this.request<ApiSyncPayload>("GET", `/api/sync/changes${query}`);
+  async syncChanges(cursor?: string, taxonomyRevision?: number): Promise<ApiSyncPayload> {
+    const query = new URLSearchParams();
+    if (cursor !== undefined) {
+      query.set("cursor", cursor);
+    }
+    if (taxonomyRevision !== undefined) {
+      query.set("taxonomyRevision", String(taxonomyRevision));
+    }
+    const queryString = query.size > 0 ? `?${query.toString()}` : "";
+    return this.request<ApiSyncPayload>("GET", `/api/sync/changes${queryString}`);
+  }
+
+  async saveTaxonomy(taxonomy: ApiTaxonomy): Promise<ApiTaxonomyDocument> {
+    return this.request<ApiTaxonomyDocument>("PUT", "/api/taxonomy", taxonomy);
   }
 
   async push(mutations: ApiMutation[]): Promise<ApiSyncPayload> {
     return this.request<ApiSyncPayload>("POST", "/api/sync/push", { mutations });
+  }
+
+  async extractPhoto(imageDataUrl: string): Promise<ApiPhotoExtraction> {
+    return this.request<ApiPhotoExtraction>("POST", "/api/extract-photo", { imageDataUrl });
+  }
+
+  async extractRecipeText(text: string, pageTitle?: string): Promise<ApiPhotoExtraction> {
+    return this.request<ApiPhotoExtraction>("POST", "/api/extract-recipe-text", { text, title: pageTitle });
   }
 }

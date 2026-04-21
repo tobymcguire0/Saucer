@@ -1,11 +1,81 @@
-import { randomUUID } from "node:crypto";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import Anthropic from "@anthropic-ai/sdk";
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
-import multer from "multer";
 import sharp from "sharp";
 import type { AppStore } from "./store.js";
 import type { Mutation, Taxonomy } from "./types.js";
+
+const EXTRACTION_PROMPT = `Extract the recipe from this image. Return ONLY a JSON object (no markdown) with:
+- title: string
+- summary: string (1-2 sentences)
+- ingredients: string[] (each with quantity, e.g. "2 cups flour")
+- instructions: string[] (each step as plain text, no leading numbers)
+- servings: string (e.g. "4 servings", or "")
+- cuisine: string (e.g. "Italian", or "")
+- mealType: string (e.g. "Dinner", or "")`;
+
+const TEXT_EXTRACTION_PROMPT = `Extract the recipe from this text. Return ONLY a JSON object (no markdown) with:
+- title: string
+- summary: string (1-2 sentences)
+- ingredients: string[] (each with quantity, e.g. "2 cups flour")
+- instructions: string[] (each step as plain text, no leading numbers)
+- servings: string (e.g. "4 servings", or "")
+- cuisine: string (e.g. "Italian", or "")
+- mealType: string (e.g. "Dinner", or "")`;
+
+function parseModelJson(raw: string): unknown {
+  // Strip optional markdown code fences the model may emit despite instructions.
+  const stripped = raw
+    .replace(/^```(?:json)?\n?/i, "")
+    .replace(/\n?```$/, "")
+    .trim();
+  return JSON.parse(stripped);
+}
+
+function hasStringMessage(value: unknown): value is { message: string } {
+  const message =
+    typeof value === "object" && value !== null ? Reflect.get(value, "message") : undefined;
+  return typeof message === "string" && message.trim() !== "";
+}
+
+function hasNumericStatus(value: unknown): value is { status: number } {
+  const status =
+    typeof value === "object" && value !== null ? Reflect.get(value, "status") : undefined;
+  return typeof status === "number";
+}
+
+function getUpstreamErrorMessage(error: unknown): string {
+  if (hasStringMessage(error)) {
+    return error.message;
+  }
+
+  const nestedError =
+    typeof error === "object" && error !== null ? Reflect.get(error, "error") : undefined;
+  if (hasStringMessage(nestedError)) {
+    return nestedError.message;
+  }
+
+  return "Unknown upstream error.";
+}
+
+function getUpstreamStatus(error: unknown): number | undefined {
+  if (hasNumericStatus(error)) {
+    return error.status;
+  }
+
+  return undefined;
+}
+
+function respondUpstreamFailure(res: Response, operation: string, error: unknown): void {
+  const providerStatus = getUpstreamStatus(error);
+  const payload: { error: string; providerStatus?: number } = {
+    error: `${operation} failed: ${getUpstreamErrorMessage(error)}`,
+  };
+  if (providerStatus !== undefined) {
+    payload.providerStatus = providerStatus;
+  }
+  res.status(providerStatus === 429 ? 503 : 502).json(payload);
+}
 
 declare global {
   namespace Express {
@@ -22,13 +92,13 @@ interface AppConfig {
   store: AppStore;
   verifyToken: VerifyToken;
   fetchImpl: FetchImpl;
+  anthropicApiKey?: string;
 }
 
-const upload = multer({ storage: multer.memoryStorage() });
-
-export function createApp({ store, verifyToken, fetchImpl }: AppConfig) {
+export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: AppConfig) {
   const app = express();
-  app.use(express.json());
+  // Increased limit to accommodate base64-encoded recipe photos (~300–500KB after resize).
+  app.use(express.json({ limit: "10mb" }));
   app.use(cors());
 
   function requireAuth(req: Request, res: Response, next: NextFunction): void {
@@ -83,11 +153,21 @@ export function createApp({ store, verifyToken, fetchImpl }: AppConfig) {
     if (!clientId) return;
 
     const cursor = req.query.cursor as string | undefined;
+    const taxonomyRevision = req.query.taxonomyRevision as string | undefined;
     if (cursor !== undefined && !/^\d+$/.test(cursor)) {
       res.status(400).json({ error: "cursor must be a numeric string." });
       return;
     }
-    const payload = await store.getSyncPayload(req.userId, clientId, cursor);
+    if (taxonomyRevision !== undefined && !/^\d+$/.test(taxonomyRevision)) {
+      res.status(400).json({ error: "taxonomyRevision must be a numeric string." });
+      return;
+    }
+    const payload = await store.getSyncPayload(
+      req.userId,
+      clientId,
+      cursor,
+      taxonomyRevision !== undefined ? parseInt(taxonomyRevision, 10) : undefined,
+    );
     res.json(payload);
   });
 
@@ -126,42 +206,112 @@ export function createApp({ store, verifyToken, fetchImpl }: AppConfig) {
   app.put("/api/taxonomy", requireAuth, async (req, res) => {
     const body = req.body as { categories?: unknown; tags?: unknown };
     if (!Array.isArray(body.categories) || !Array.isArray(body.tags)) {
-      res
-        .status(400)
-        .json({ error: "Taxonomy payload must include categories and tags arrays." });
+      res.status(400).json({ error: "Taxonomy payload must include categories and tags arrays." });
       return;
     }
     const doc = await store.saveTaxonomy(req.userId, body as unknown as Taxonomy);
     res.json(doc);
   });
 
-  app.post(
-    "/api/images/upload",
-    requireAuth,
-    upload.single("image"),
-    async (req, res) => {
-      if (!req.file) {
-        res.status(400).json({ error: "Image upload is required." });
-        return;
-      }
+  app.post("/api/extract-photo", requireAuth, async (req, res) => {
+    if (!anthropicApiKey) {
+      res.status(503).json({ error: "Photo extraction is not configured on this server." });
+      return;
+    }
 
-      const s3 = new S3Client({ region: process.env.AWS_REGION });
-      const buffer = await sharp(req.file.buffer).jpeg().toBuffer();
-      const key = `images/${req.userId}/${randomUUID()}.jpg`;
-      const bucket = process.env.S3_BUCKET_NAME ?? "saucer-s3";
+    const { imageDataUrl } = req.body as { imageDataUrl?: string };
+    if (!imageDataUrl?.startsWith("data:image/")) {
+      res.status(400).json({ error: "imageDataUrl must be a data: image URI." });
+      return;
+    }
 
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: key,
-          Body: buffer,
-          ContentType: "image/jpeg",
-        }),
-      );
+    const commaIndex = imageDataUrl.indexOf(",");
+    const base64 = imageDataUrl.slice(commaIndex + 1);
 
-      res.json({ imageUrl: `https://${bucket}.s3.amazonaws.com/${key}` });
-    },
-  );
+    // Resize to ≤1024px wide before sending to reduce token count and cost.
+    let resizedBuffer: Buffer;
+    try {
+      resizedBuffer = await sharp(Buffer.from(base64, "base64"))
+        .resize({ width: 1024, withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toBuffer();
+    } catch {
+      res.status(400).json({ error: "imageDataUrl must contain a valid image." });
+      return;
+    }
+
+    const client = new Anthropic({ apiKey: anthropicApiKey });
+    let rawText = "";
+    try {
+      const message = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/jpeg",
+                  data: resizedBuffer.toString("base64"),
+                },
+              },
+              { type: "text", text: EXTRACTION_PROMPT },
+            ],
+          },
+        ],
+      });
+      rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
+    } catch (error) {
+      respondUpstreamFailure(res, "Photo extraction", error);
+      return;
+    }
+    try {
+      res.json(parseModelJson(rawText));
+    } catch {
+      res.status(502).json({ error: "Model returned unparseable response.", raw: rawText });
+    }
+  });
+
+  app.post("/api/extract-recipe-text", requireAuth, async (req, res) => {
+    if (!anthropicApiKey) {
+      res.status(503).json({ error: "Recipe extraction is not configured on this server." });
+      return;
+    }
+
+    const { text, title } = req.body as { text?: string; title?: string };
+    if (!text?.trim()) {
+      res.status(400).json({ error: "text is required." });
+      return;
+    }
+
+    // Truncate to limit token usage on very long pages.
+    const truncated = text.slice(0, 8000);
+    const prompt = title
+      ? `Page title: ${title}\n\n${TEXT_EXTRACTION_PROMPT}\n\n${truncated}`
+      : `${TEXT_EXTRACTION_PROMPT}\n\n${truncated}`;
+
+    const client = new Anthropic({ apiKey: anthropicApiKey });
+    let rawText = "";
+    try {
+      const message = await client.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: prompt }],
+      });
+      rawText = message.content[0].type === "text" ? message.content[0].text.trim() : "";
+    } catch (error) {
+      respondUpstreamFailure(res, "Recipe extraction", error);
+      return;
+    }
+    try {
+      res.json(parseModelJson(rawText));
+    } catch {
+      res.status(502).json({ error: "Model returned unparseable response.", raw: rawText });
+    }
+  });
 
   app.post("/api/import/website", requireAuth, async (req, res) => {
     const { url } = req.body as { url?: string };

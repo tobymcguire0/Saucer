@@ -34,6 +34,8 @@ function coerceText(value: unknown): string {
   return "";
 }
 
+// Strips measurement units and applies naive suffix singularization so that
+// "tomatoes" and "tomato" hash to the same term for tag matching.
 export function normalizeTerm(value: unknown) {
   const normalized = normalizeWhitespace(coerceText(value))
     .toLowerCase()
@@ -97,6 +99,8 @@ function similarity(a: string, b: string) {
   const distance = levenshtein(a, b);
   const maxLength = Math.max(a.length, b.length);
   const ratio = 1 - distance / maxLength;
+  // Substring containment gets a flat 0.9 floor so short tokens embedded in longer ones
+  // (e.g. "egg" in "scrambled egg") score higher than pure edit-distance would give them.
   const overlap = a.includes(b) || b.includes(a) ? 0.9 : 0;
   return Math.max(ratio, overlap);
 }
@@ -493,6 +497,7 @@ export function buildTagSuggestions(
     directCandidates.push({ term: "Main", categoryName: "Course" });
   }
 
+  // Difficulty heuristic: proxy ingredient count as a rough complexity signal.
   if (ingredientLines.length <= 7) {
     directCandidates.push({ term: "Easy", categoryName: "Difficulty" });
   } else if (ingredientLines.length <= 12) {
@@ -501,6 +506,7 @@ export function buildTagSuggestions(
     directCandidates.push({ term: "Hard", categoryName: "Difficulty" });
   }
 
+  // Time heuristic: 5 or fewer instruction steps is treated as Quick.
   if (instructionsText.split(/\r?\n/).length <= 5) {
     directCandidates.push({ term: "Quick", categoryName: "Time" });
   } else {

@@ -9,7 +9,7 @@ function AppWorkspace() {
 
   return (
     <section className="flex flex-1 flex-col gap-4">
-      <header className="rounded-[var(--radius-card)] border border-panel-15 bg-background-0 px-5 py-4 shadow-[var(--shadow-panel)]">
+      <header className="rounded-[var(--radius-card)] border border-panel-80 bg-panel-15 px-5 py-4 shadow-[var(--shadow-panel)]">
         <div>
           <p className="mt-2 text-3xl font-semibold tracking-tight text-text-60 pb-2">
             Workspace

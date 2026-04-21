@@ -1,8 +1,24 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { anthropicCreateMock } = vi.hoisted(() => ({
+  anthropicCreateMock: vi.fn(),
+}));
+
+vi.mock("@anthropic-ai/sdk", () => ({
+  default: vi.fn().mockImplementation(() => ({
+    messages: {
+      create: anthropicCreateMock,
+    },
+  })),
+}));
+
 import { createApp } from "../src/app.js";
 import type { AppStore } from "../src/store.js";
 import type { Recipe, SyncPayload, TaxonomyDocument } from "../src/types.js";
+
+const VALID_IMAGE_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==";
 
 function createStoreStub() {
   const taxonomyDocument: TaxonomyDocument = {
@@ -76,6 +92,7 @@ describe("createApp", () => {
   beforeEach(() => {
     verifyToken.mockClear();
     fetchImpl.mockReset();
+    anthropicCreateMock.mockReset();
   });
 
   it("serves health checks without authentication", async () => {
@@ -138,6 +155,21 @@ describe("createApp", () => {
     });
   });
 
+  it("returns taxonomy updates from sync changes when the client revision is stale", async () => {
+    const { store, getSyncPayload, taxonomyDocument, syncPayload } = createStoreStub();
+    syncPayload.taxonomy = taxonomyDocument.taxonomy;
+    syncPayload.taxonomyRevision = taxonomyDocument.revision;
+
+    const response = await request(createApp({ store, verifyToken, fetchImpl }))
+      .get("/api/sync/changes?cursor=7&taxonomyRevision=1")
+      .set("Authorization", "Bearer good-token")
+      .set("X-Client-Id", "device-abc")
+      .expect(200);
+
+    expect(getSyncPayload).toHaveBeenCalledWith("user-123", "device-abc", "7", 1);
+    expect(response.body).toEqual(syncPayload);
+  });
+
   it("rejects invalid sync cursors", async () => {
     const { store, getSyncPayload } = createStoreStub();
 
@@ -146,6 +178,18 @@ describe("createApp", () => {
       .set("Authorization", "Bearer good-token")
       .set("X-Client-Id", "device-abc")
       .expect(400, { error: "cursor must be a numeric string." });
+
+    expect(getSyncPayload).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid taxonomy revisions in sync requests", async () => {
+    const { store, getSyncPayload } = createStoreStub();
+
+    await request(createApp({ store, verifyToken, fetchImpl }))
+      .get("/api/sync/changes?taxonomyRevision=not-a-number")
+      .set("Authorization", "Bearer good-token")
+      .set("X-Client-Id", "device-abc")
+      .expect(400, { error: "taxonomyRevision must be a numeric string." });
 
     expect(getSyncPayload).not.toHaveBeenCalled();
   });
@@ -177,13 +221,72 @@ describe("createApp", () => {
     expect(saveTaxonomy).not.toHaveBeenCalled();
   });
 
-  it("requires an uploaded image file", async () => {
+  it("rejects photo extraction requests with invalid image payloads", async () => {
     const { store } = createStoreStub();
 
-    await request(createApp({ store, verifyToken, fetchImpl }))
-      .post("/api/images/upload")
+    await request(createApp({ store, verifyToken, fetchImpl, anthropicApiKey: "test-key" }))
+      .post("/api/extract-photo")
       .set("Authorization", "Bearer good-token")
-      .expect(400, { error: "Image upload is required." });
+      .send({ imageDataUrl: "data:image/png;base64,not-a-real-image" })
+      .expect(400, { error: "imageDataUrl must contain a valid image." });
+
+    expect(anthropicCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("maps photo extraction provider failures to a stable JSON response", async () => {
+    const { store } = createStoreStub();
+    anthropicCreateMock.mockRejectedValue({
+      status: 529,
+      message: "load failed",
+    });
+
+    await request(createApp({ store, verifyToken, fetchImpl, anthropicApiKey: "test-key" }))
+      .post("/api/extract-photo")
+      .set("Authorization", "Bearer good-token")
+      .send({ imageDataUrl: VALID_IMAGE_DATA_URL })
+      .expect(502, {
+        error: "Photo extraction failed: load failed",
+        providerStatus: 529,
+      });
+  });
+
+  it("returns parsed photo extraction payloads when the provider succeeds", async () => {
+    const { store } = createStoreStub();
+    anthropicCreateMock.mockResolvedValue({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            title: "Toast",
+            summary: "Simple toast.",
+            ingredients: ["2 slices bread"],
+            instructions: ["Toast the bread."],
+            servings: "1 serving",
+            cuisine: "",
+            mealType: "Breakfast",
+          }),
+        },
+      ],
+    });
+
+    const response = await request(
+      createApp({ store, verifyToken, fetchImpl, anthropicApiKey: "test-key" }),
+    )
+      .post("/api/extract-photo")
+      .set("Authorization", "Bearer good-token")
+      .send({ imageDataUrl: VALID_IMAGE_DATA_URL })
+      .expect(200);
+
+    expect(response.body).toEqual({
+      title: "Toast",
+      summary: "Simple toast.",
+      ingredients: ["2 slices bread"],
+      instructions: ["Toast the bread."],
+      servings: "1 serving",
+      cuisine: "",
+      mealType: "Breakfast",
+    });
+    expect(anthropicCreateMock).toHaveBeenCalledOnce();
   });
 
   it("fetches website imports when the request body is valid", async () => {

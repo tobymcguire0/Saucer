@@ -27,6 +27,7 @@ const app = createApp({
     return { sub: payload.sub };
   },
   fetchImpl: fetch,
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 const PORT = Number(process.env.PORT ?? 3001);

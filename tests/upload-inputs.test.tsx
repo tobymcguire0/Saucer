@@ -159,7 +159,7 @@ describe("upload inputs", () => {
 
     expect(screen.queryByLabelText("Title")).toBeNull();
 
-    const fileInput = screen.getByLabelText("Text file");
+    const fileInput = screen.getByLabelText("Upload Text");
     const file = new File(
       [
         `Lemon Pasta

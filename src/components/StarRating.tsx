@@ -27,10 +27,11 @@ function StarRating({
           type="button"
           className={cn(
             "rounded-full border border-transparent bg-transparent p-1 leading-none transition",
+            "text-shadow-xs text-shadow-accent-60",
             "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent-10",
             compact ? "text-lg" : "text-2xl",
             value <= displayValue ? "text-accent-45" : "text-panel-25",
-            "hover:text-accent-50",
+            "hover:text-accent-60",
           )}
           aria-label={`${label}: ${value} star${value === 1 ? "" : "s"}`}
           aria-pressed={value === rating}

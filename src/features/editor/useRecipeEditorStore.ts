@@ -21,6 +21,7 @@ function createInitialState() {
     draftImported: false,
     showSourceControls: true,
     uploadErrorActive: false,
+    uploadShakeActive: false,
     isImporting: false,
   };
 }
@@ -31,6 +32,7 @@ type RecipeEditorStoreState = ReturnType<typeof createInitialState> & {
   openEditEditor: (recipe: Recipe) => void;
   updateDraft: (patch: Partial<RecipeDraft>) => void;
   clearUploadError: () => void;
+  clearUploadShake: () => void;
   revealSourceControls: () => void;
   selectSourceType: (sourceType: SourceType) => void;
   importFromWebsite: () => Promise<void>;
@@ -121,6 +123,7 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       },
     })),
   clearUploadError: () => set({ uploadErrorActive: false }),
+  clearUploadShake: () => set({ uploadShakeActive: false }),
   revealSourceControls: () => {
     set({
       showSourceControls: true,
@@ -146,34 +149,43 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
   },
   importFromWebsite: async () => {
     const { draft } = get();
-    set({
-      isImporting: true,
-      uploadErrorActive: false,
-    });
+    set({ isImporting: true, uploadErrorActive: false, uploadShakeActive: false });
     useStatusStore.getState().updateStatus("Importing recipe from website...", "info");
 
     try {
-      const importedDraft = await importRecipeDraftFromWebsite(draft.sourceRef);
+      const { useSyncStore } = await import("../sync/useSyncStore");
+      const { client: syncClient, connected } = useSyncStore.getState();
+      const connectedClient = connected ? syncClient : null;
+
+      if (!connected) {
+        set({ uploadErrorActive: true, uploadShakeActive: true });
+        useStatusStore.getState().updateStatus("Server offline — parsing website locally.", "error");
+        setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
+      }
+
+      const extractText = connectedClient
+        ? (text: string, pageTitle?: string) => connectedClient.extractRecipeText(text, pageTitle)
+        : undefined;
+
+      const importedDraft = await importRecipeDraftFromWebsite(draft.sourceRef, extractText);
       const taxonomy = useSaucerStore.getState().taxonomy;
       const autoSelectedTagIds = getAutoSelectedDraftTagIds(buildSuggestions(importedDraft, taxonomy));
 
       set({
-        draft: {
-          ...importedDraft,
-          selectedTagIds: autoSelectedTagIds,
-        },
+        draft: { ...importedDraft, selectedTagIds: autoSelectedTagIds },
         draftImported: true,
         showSourceControls: false,
+        uploadErrorActive: false,
+        uploadShakeActive: false,
       });
-      useStatusStore
-        .getState()
-        .updateStatus("Website recipe imported into the review form.", "success");
+      useStatusStore.getState().updateStatus("Website recipe imported into the review form.", "success");
     } catch (error) {
-      set({ uploadErrorActive: true });
+      set({ uploadErrorActive: true, uploadShakeActive: true });
       useStatusStore.getState().updateStatus(
         `Website import failed: ${error instanceof Error ? error.message : "unknown error"}`,
         "error",
       );
+      setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
     } finally {
       set({ isImporting: false });
     }
@@ -184,32 +196,63 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
     }
 
     const { draft } = get();
-    set({
-      isImporting: true,
-      uploadErrorActive: false,
-    });
+    set({ isImporting: true, uploadErrorActive: false, uploadShakeActive: false });
     useStatusStore.getState().updateStatus(`Importing ${file.name}...`, "info");
 
     try {
-      const importedDraft = await importRecipeDraftFromFile(file, draft.sourceType);
+      const { useSyncStore } = await import("../sync/useSyncStore");
+      const { client: syncClient, connected } = useSyncStore.getState();
+      const connectedClient = connected ? syncClient : null;
+
+      if (!connected) {
+        set({ uploadErrorActive: true, uploadShakeActive: true });
+        useStatusStore.getState().updateStatus("Server offline — importing with local processing.", "error");
+        setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
+      }
+
+      const extractPhoto = connectedClient
+        ? (dataUrl: string) => connectedClient.extractPhoto(dataUrl)
+        : undefined;
+      const extractText = connectedClient
+        ? (text: string) => connectedClient.extractRecipeText(text)
+        : undefined;
+
+      let importedDraft: RecipeDraft;
+      if (draft.sourceType === "photo" && extractPhoto) {
+        try {
+          importedDraft = await importRecipeDraftFromFile(file, draft.sourceType, extractPhoto);
+        } catch (apiErr) {
+          useStatusStore.getState().updateStatus(
+            `AI photo extraction failed — falling back to local OCR in 5 seconds. (${apiErr instanceof Error ? apiErr.message : "unknown"})`,
+            "error",
+          );
+          set({ uploadShakeActive: true });
+          setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          importedDraft = await importRecipeDraftFromFile(file, draft.sourceType);
+        }
+      } else {
+        importedDraft = await importRecipeDraftFromFile(file, draft.sourceType, undefined, extractText);
+      }
+
       const taxonomy = useSaucerStore.getState().taxonomy;
       const autoSelectedTagIds = getAutoSelectedDraftTagIds(buildSuggestions(importedDraft, taxonomy));
 
       set({
-        draft: {
-          ...importedDraft,
-          selectedTagIds: autoSelectedTagIds,
-        },
+        draft: { ...importedDraft, selectedTagIds: autoSelectedTagIds },
         draftImported: true,
         showSourceControls: false,
+        uploadErrorActive: false,
+        uploadShakeActive: false,
       });
       useStatusStore.getState().updateStatus(`${file.name} imported into the review form.`, "success");
     } catch (error) {
-      set({ uploadErrorActive: true });
+      set({ uploadErrorActive: true, uploadShakeActive: true });
       useStatusStore.getState().updateStatus(
         `Import failed: ${error instanceof Error ? error.message : "unknown error"}`,
         "error",
       );
+      setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
     } finally {
       set({ isImporting: false });
     }

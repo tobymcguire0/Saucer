@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import { cn } from "../../../lib/cn";
 import type { RecipeDraft } from "../../../lib/models";
 import { sourceTypes } from "../../../lib/models";
@@ -6,6 +8,7 @@ type RecipeSourcePanelProps = {
   draft: RecipeDraft;
   showImportControls: boolean;
   uploadErrorActive: boolean;
+  uploadShakeActive: boolean;
   isImporting: boolean;
   clearUploadError: () => void;
   updateDraft: (patch: Partial<RecipeDraft>) => void;
@@ -18,6 +21,7 @@ function RecipeSourcePanel({
   draft,
   showImportControls,
   uploadErrorActive,
+  uploadShakeActive,
   isImporting,
   clearUploadError,
   updateDraft,
@@ -60,6 +64,7 @@ function RecipeSourcePanel({
             uploadErrorActive
               ? "border-accent-35 bg-accent-5 shadow-[0_0_0_1px_color-mix(in_srgb,var(--color-accent-25)_55%,transparent)]"
               : "border-panel-15 bg-background-0",
+            uploadShakeActive && "animate-shake",
           )}
           data-testid="upload-content"
           data-upload-error={uploadErrorActive}
@@ -87,24 +92,56 @@ function RecipeSourcePanel({
           ) : null}
 
           {draft.sourceType === "photo" || draft.sourceType === "text" ? (
-            <label className="field">
-              <span className="text-sm font-medium text-text-50">
-                {draft.sourceType === "photo" ? "Photo file" : "Text file"}
-              </span>
-              <input
-                className="field-input"
-                type="file"
-                accept={draft.sourceType === "photo" ? "image/*" : ".txt,.md,.rtf"}
-                onChange={(event) => {
-                  clearUploadError();
-                  void importFromFile(event.currentTarget.files?.[0]);
-                }}
-              />
-            </label>
+            <FileUploadButton
+              sourceType={draft.sourceType}
+              isImporting={isImporting}
+              clearUploadError={clearUploadError}
+              importFromFile={importFromFile}
+            />
           ) : null}
         </div>
       ) : null}
     </section>
+  );
+}
+
+function FileUploadButton({
+  sourceType,
+  isImporting,
+  clearUploadError,
+  importFromFile,
+}: {
+  sourceType: "photo" | "text";
+  isImporting: boolean;
+  clearUploadError: () => void;
+  importFromFile: (file: File | undefined) => Promise<void>;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const label = sourceType === "photo" ? "Upload Image" : "Upload Text";
+  const accept = sourceType === "photo" ? "image/*" : ".txt,.md,.rtf";
+
+  return (
+    <div className="flex justify-center">
+      <button
+        type="button"
+        className="btn-primary active:scale-95"
+        disabled={isImporting}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {isImporting ? "Processing..." : label}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        aria-label={label}
+        style={{ position: "absolute", width: 0, height: 0, opacity: 0 }}
+        accept={accept}
+        onChange={(event) => {
+          clearUploadError();
+          void importFromFile(event.currentTarget.files?.[0]);
+        }}
+      />
+    </div>
   );
 }
 

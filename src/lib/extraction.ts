@@ -129,6 +129,15 @@ function extractSection(lines: string[], startMatchers: RegExp[], endMatchers: R
   return lines.slice(startIndex + 1, nextIndex === -1 ? lines.length : nextIndex);
 }
 
+function isValidImageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" || url.startsWith("data:image/");
+  } catch {
+    return false;
+  }
+}
+
 export function extractDraftFromPlainText(input: string, sourceType: SourceType = "text") {
   const draft = createEmptyDraft(sourceType);
   const lines = cleanLines(input);
@@ -231,9 +240,12 @@ export function parseDraftFromWebsiteHtml(
     // JSON-LD is already structured — no need for LLM extraction.
     draft.title = normalizeExtractedText(jsonLdRecipe.name) || "Imported recipe";
     draft.summary = normalizeExtractedText(jsonLdRecipe.description);
-    draft.heroImage = extractImageUrl(jsonLdRecipe.image, sourceUrl) || undefined;
+    const extractedImageUrl = extractImageUrl(jsonLdRecipe.image, sourceUrl);
+    draft.heroImage = (extractedImageUrl && isValidImageUrl(extractedImageUrl)) ? extractedImageUrl : undefined;
     draft.ingredientsText = normalizeMultilineText(
-      (jsonLdRecipe.recipeIngredient ?? []).map((x) => decodeHtmlEntities(String(x))).join("\n"),
+      (Array.isArray(jsonLdRecipe.recipeIngredient) ? jsonLdRecipe.recipeIngredient : [])
+        .map((x) => decodeHtmlEntities(String(x)))
+        .join("\n"),
     );
     draft.instructionsText = normalizeMultilineText(
       Array.isArray(jsonLdRecipe.recipeInstructions)
@@ -259,6 +271,7 @@ export function parseDraftFromWebsiteHtml(
     document.querySelector('meta[property="og:image"]')?.getAttribute("content") ?? "",
     sourceUrl,
   );
+  const validatedHeroImage = (heroImage && isValidImageUrl(heroImage)) ? heroImage : undefined;
   if (extractText) {
     return extractText(document.body.textContent ?? "", document.title)
       .then((result) => {
@@ -269,7 +282,7 @@ export function parseDraftFromWebsiteHtml(
         draft.servings = result.servings;
         draft.cuisine = result.cuisine;
         draft.mealType = result.mealType;
-        draft.heroImage = heroImage || undefined;
+        draft.heroImage = validatedHeroImage;
         return draft;
       })
       .catch(() => {
@@ -280,7 +293,7 @@ export function parseDraftFromWebsiteHtml(
           sourceRef: sourceUrl,
           title: document.title || fallbackDraft.title,
           summary: fallbackDraft.summary || "Fallback extraction from page text.",
-          heroImage: heroImage || undefined,
+          heroImage: validatedHeroImage,
         };
       });
   }
@@ -291,23 +304,15 @@ export function parseDraftFromWebsiteHtml(
     sourceRef: sourceUrl,
     title: document.title || fallbackDraft.title,
     summary: fallbackDraft.summary || "Fallback extraction from page text.",
-    heroImage: heroImage || undefined,
+    heroImage: validatedHeroImage,
   };
 }
 
 function decodeHtmlEntities(value: string): string {
   if (!value || !value.includes("&")) return value;
-
-  // Decode up to 3 passes to handle double-encoded content like &amp;frac12;
-  let current = value;
-  for (let i = 0; i < 3; i += 1) {
-    const textarea = document.createElement("textarea");
-    textarea.innerHTML = current;
-    const decoded = textarea.value;
-    if (decoded === current) break;
-    current = decoded;
-  }
-  return current;
+  // Use DOMParser to safely decode HTML entities without innerHTML assignment
+  const doc = new DOMParser().parseFromString(value, "text/html");
+  return doc.body.textContent ?? value;
 }
 
 function normalizeExtractedText(value: unknown): string {

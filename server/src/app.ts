@@ -99,7 +99,10 @@ export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: Ap
   const app = express();
   // Increased limit to accommodate base64-encoded recipe photos (~300–500KB after resize).
   app.use(express.json({ limit: "10mb" }));
-  app.use(cors());
+  app.use(cors({
+    origin: process.env.ALLOWED_ORIGIN ?? "http://localhost:1420",
+    credentials: true,
+  }));
 
   function requireAuth(req: Request, res: Response, next: NextFunction): void {
     const authHeader = req.headers.authorization;

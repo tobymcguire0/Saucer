@@ -6,6 +6,7 @@ use std::{
     path::PathBuf,
 };
 use tauri::{AppHandle, Manager};
+use url::Url;
 
 #[derive(Serialize)]
 struct RecipePagePayload {
@@ -43,6 +44,19 @@ fn write_text_file(path: &PathBuf, contents: &str) -> Result<(), String> {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
     fs::write(path, contents).map_err(|error| error.to_string())
+}
+
+fn validate_recipe_path(path: &str) -> Result<(), String> {
+    // Reject traversal sequences, non-recipes/ prefix, and anything not ending in .md
+    if path.contains("..") || !path.starts_with("recipes/") || !path.ends_with(".md") {
+        return Err(format!("Rejected unsafe recipe path: {path}"));
+    }
+    // Ensure the filename segment contains no slashes (no subdirectory traversal)
+    let name = &path["recipes/".len()..path.len() - ".md".len()];
+    if name.is_empty() || name.contains('/') || name.contains('\\') {
+        return Err(format!("Rejected unsafe recipe path: {path}"));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -125,12 +139,17 @@ fn replace_vault_snapshot(app: AppHandle, snapshot: VaultSnapshot) -> Result<Vau
     }
 
     for (recipe_id, markdown) in &snapshot.recipe_files {
-        let relative_path = snapshot
-            .recipe_paths
-            .get(recipe_id)
-            .cloned()
-            .unwrap_or_else(|| format!("recipes/{recipe_id}.md"));
-        write_text_file(&root.join(relative_path), markdown)?;
+        let relative_path = match snapshot.recipe_paths.get(recipe_id).cloned() {
+            Some(p) => p,
+            None => {
+                if recipe_id.contains("..") || recipe_id.contains('/') || recipe_id.contains('\\') {
+                    return Err(format!("Rejected unsafe recipe ID: {recipe_id}"));
+                }
+                format!("recipes/{recipe_id}.md")
+            }
+        };
+        validate_recipe_path(&relative_path)?;
+        write_text_file(&root.join(&relative_path), markdown)?;
     }
 
     write_text_file(
@@ -147,6 +166,23 @@ fn replace_vault_snapshot(app: AppHandle, snapshot: VaultSnapshot) -> Result<Vau
 
 #[tauri::command]
 async fn fetch_recipe_page(url: String) -> Result<RecipePagePayload, String> {
+    // Validate URL to prevent SSRF attacks
+    let parsed_url = Url::parse(&url).map_err(|_| "Invalid URL".to_string())?;
+    if !matches!(parsed_url.scheme(), "http" | "https") {
+        return Err("Only http/https URLs are permitted".to_string());
+    }
+    if let Some(host) = parsed_url.host_str() {
+        let blocked = host == "localhost"
+            || host.starts_with("127.")
+            || host.starts_with("192.168.")
+            || host.starts_with("10.")
+            || host == "0.0.0.0"
+            || host == "::1";
+        if blocked {
+            return Err("Private/loopback network addresses are not permitted".to_string());
+        }
+    }
+
     let client = reqwest::Client::builder()
         .user_agent("Saucer/0.1")
         .redirect(reqwest::redirect::Policy::limited(10))

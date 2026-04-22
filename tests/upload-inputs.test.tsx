@@ -4,8 +4,9 @@ import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { invokeMock } = vi.hoisted(() => ({
+const { invokeMock, canUseTauriMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
+  canUseTauriMock: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("../src/lib/searchIndex", () => ({
@@ -22,12 +23,18 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
 }));
 
+vi.mock("../src/lib/persistence", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/lib/persistence")>();
+  return { ...original, canUseTauri: canUseTauriMock };
+});
+
 import { renderApp, resetMockAuth } from "./renderApp";
 
 describe("upload inputs", () => {
   beforeEach(() => {
     window.localStorage.clear();
     invokeMock.mockReset();
+    canUseTauriMock.mockReturnValue(false);
     resetMockAuth();
   });
 
@@ -74,6 +81,7 @@ describe("upload inputs", () => {
 
   it("hides source controls after a successful website import and can reopen them", async () => {
     const user = userEvent.setup();
+    canUseTauriMock.mockReturnValue(true);
     invokeMock.mockResolvedValue({
       url: "https://example.com/recipe",
       html: `
@@ -123,7 +131,11 @@ describe("upload inputs", () => {
 
   it("keeps website source controls visible on import failure and marks the upload area as errored", async () => {
     const user = userEvent.setup();
-    invokeMock.mockRejectedValue(new Error("failed to fetch"));
+    canUseTauriMock.mockReturnValue(true);
+    invokeMock.mockImplementation((command: string) => {
+      if (command === "fetch_recipe_page") return Promise.reject(new Error("failed to fetch"));
+      return Promise.resolve({ recipeFiles: {}, attachments: {} });
+    });
 
     renderApp();
 

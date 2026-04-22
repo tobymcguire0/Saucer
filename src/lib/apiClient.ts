@@ -189,4 +189,8 @@ export class ApiClient {
   async extractRecipeText(text: string, pageTitle?: string): Promise<ApiPhotoExtraction> {
     return this.request<ApiPhotoExtraction>("POST", "/api/extract-recipe-text", { text, title: pageTitle });
   }
+
+  async fetchWebsitePage(url: string): Promise<{ url: string; html: string }> {
+    return this.request<{ url: string; html: string }>("POST", "/api/import/website", { url });
+  }
 }

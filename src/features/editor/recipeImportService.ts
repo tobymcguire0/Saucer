@@ -5,6 +5,7 @@ import {
   extractDraftFromTextFile,
   extractDraftFromWebsite,
   type TextExtractor,
+  type WebsitePageFetcher,
 } from "../../lib/extraction";
 import type { SourceType } from "../../lib/models";
 
@@ -28,8 +29,12 @@ export function normalizeWebsiteImportUrl(value: string) {
   return parsed.toString();
 }
 
-export async function importRecipeDraftFromWebsite(value: string, extractText?: TextExtractor) {
-  return extractDraftFromWebsite(normalizeWebsiteImportUrl(value), extractText);
+export async function importRecipeDraftFromWebsite(
+  value: string,
+  extractText?: TextExtractor,
+  fetchPage?: WebsitePageFetcher,
+) {
+  return extractDraftFromWebsite(normalizeWebsiteImportUrl(value), extractText, fetchPage);
 }
 
 export async function importRecipeDraftFromFile(

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import type { Recipe, RecipeDraft, SourceType, Taxonomy } from "../../lib/models";
+import { canUseTauri } from "../../lib/persistence";
 import {
   buildTagSuggestions,
   convertDraftToRecipe,
@@ -158,6 +159,12 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       const connectedClient = connected ? syncClient : null;
 
       if (!connected) {
+        if (!canUseTauri()) {
+          set({ uploadErrorActive: true, uploadShakeActive: true, isImporting: false });
+          useStatusStore.getState().updateStatus("Connect to the server to import from websites.", "error");
+          setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
+          return;
+        }
         set({ uploadErrorActive: true, uploadShakeActive: true });
         useStatusStore.getState().updateStatus("Server offline — parsing website locally.", "error");
         setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
@@ -167,7 +174,11 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
         ? (text: string, pageTitle?: string) => connectedClient.extractRecipeText(text, pageTitle)
         : undefined;
 
-      const importedDraft = await importRecipeDraftFromWebsite(draft.sourceRef, extractText);
+      const fetchPage = connectedClient
+        ? (url: string) => connectedClient.fetchWebsitePage(url)
+        : undefined;
+
+      const importedDraft = await importRecipeDraftFromWebsite(draft.sourceRef, extractText, fetchPage);
       const taxonomy = useSaucerStore.getState().taxonomy;
       const autoSelectedTagIds = getAutoSelectedDraftTagIds(buildSuggestions(importedDraft, taxonomy));
 

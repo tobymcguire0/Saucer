@@ -3,6 +3,7 @@ import { createWorker } from "tesseract.js";
 
 import type { ApiPhotoExtraction } from "./apiClient";
 import type { RecipeDraft, SourceType } from "./models";
+import { canUseTauri } from "./persistence";
 import { createEmptyDraft } from "./taxonomy";
 
 const cuisineHints = [
@@ -213,6 +214,7 @@ type WebsiteImportPayload = {
 };
 
 export type TextExtractor = (text: string, pageTitle?: string) => Promise<ApiPhotoExtraction>;
+export type WebsitePageFetcher = (url: string) => Promise<{ url: string; html: string }>;
 
 export function parseDraftFromWebsiteHtml(
   html: string,
@@ -320,8 +322,19 @@ function normalizeMultilineText(value: string): string {
     .trim();
 }
 
-export async function extractDraftFromWebsite(url: string, extractText?: TextExtractor) {
-  const payload = await invoke<WebsiteImportPayload>("fetch_recipe_page", { url });
+export async function extractDraftFromWebsite(
+  url: string,
+  extractText?: TextExtractor,
+  fetchPage?: WebsitePageFetcher,
+) {
+  let payload: WebsiteImportPayload;
+  if (canUseTauri()) {
+    payload = await invoke<WebsiteImportPayload>("fetch_recipe_page", { url });
+  } else if (fetchPage) {
+    payload = await fetchPage(url);
+  } else {
+    throw new Error("Connect to the server to import from websites.");
+  }
   return await parseDraftFromWebsiteHtml(payload.html, payload.url || url, extractText);
 }
 

@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import type { RecipeDraft } from "../../../lib/models";
 
 type RecipeDraftFieldsProps = {
@@ -6,7 +8,35 @@ type RecipeDraftFieldsProps = {
 };
 
 function RecipeDraftFields({ draft, updateDraft }: RecipeDraftFieldsProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => updateDraft({ heroImage: String(reader.result ?? "") });
+    reader.readAsDataURL(file);
+    event.currentTarget.value = "";
+  }
+
   return (
+    <>
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+      <div
+        className="group relative h-48 w-full cursor-pointer overflow-hidden rounded-[calc(var(--radius-card)-0.5rem)] bg-panel-5"
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {draft.heroImage ? (
+          <img className="h-full w-full object-cover" src={draft.heroImage} alt="" />
+        ) : (
+          <div className="grid h-full w-full place-items-center text-sm font-medium text-text-35">
+            No image
+          </div>
+        )}
+        <div className="absolute inset-0 flex items-center justify-center bg-text-100/50 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <span className="text-sm font-semibold text-white">Click to change image</span>
+        </div>
+      </div>
     <div className="grid gap-4 md:grid-cols-2">
       <label className="field">
         <span className="text-sm font-medium text-text-50">Title</span>
@@ -76,6 +106,7 @@ function RecipeDraftFields({ draft, updateDraft }: RecipeDraftFieldsProps) {
         />
       </label>
     </div>
+    </>
   );
 }
 

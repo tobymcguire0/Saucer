@@ -39,6 +39,7 @@ export function useRecipeEditorViewModel() {
       selectSourceType: store.selectSourceType,
       importFromWebsite: store.importFromWebsite,
       importFromFile: store.importFromFile,
+      importFromText: store.importFromText,
       toggleDraftTag: store.toggleDraftTag,
       createDraftTag: store.createDraftTag,
       saveDraft: store.saveDraft,

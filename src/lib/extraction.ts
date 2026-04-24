@@ -380,12 +380,57 @@ export async function extractDraftFromTextFile(file: File, extractText?: TextExt
   draft.sourceRef = file.name;
   return draft;
 }
+export async function extractDraftFromRawText(text: string, extractText?: TextExtractor) {
+  if (extractText) {
+    try {
+      const result = await extractText(text);
+      const draft = createEmptyDraft("text");
+      draft.title = result.title || "Pasted recipe";
+      draft.summary = result.summary;
+      draft.ingredientsText = result.ingredients.join("\n");
+      draft.instructionsText = result.instructions.join("\n");
+      draft.servings = result.servings;
+      draft.cuisine = result.cuisine;
+      draft.mealType = result.mealType;
+      draft.sourceRef = "Pasted text";
+      return draft;
+    } catch {
+      // LLM call failed — fall through to local parsing.
+    }
+  }
+  const draft = extractDraftFromPlainText(text, "text");
+  draft.sourceRef = "Pasted text";
+  return draft;
+}
+
+export async function extractDraftFromPdfFile(file: File, extractText?: TextExtractor) {
+  const arrayBuffer = await file.arrayBuffer();
+  const { getDocument, GlobalWorkerOptions } = await import("pdfjs-dist");
+  GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url,
+  ).toString();
+  const pdf = await getDocument({ data: arrayBuffer }).promise;
+  const pageContents = await Promise.all(
+    Array.from({ length: pdf.numPages }, (_, i) =>
+      pdf.getPage(i + 1).then((p) => p.getTextContent()),
+    ),
+  );
+  const text = pageContents
+    .flatMap((p) => p.items.map((item) => ("str" in item ? item.str : "")))
+    .join(" ");
+  const draft = await extractDraftFromRawText(text, extractText);
+  draft.sourceRef = file.name;
+  draft.sourceType = "file";
+  return draft;
+}
+
 export async function extractDraftFromPhoto(file: File) {
   const dataUrl = await readFileAsDataUrl(file);
   const worker = await createWorker("eng");
   try {
     const { data: { text } } = await worker.recognize(dataUrl);
-    const draft = extractDraftFromPlainText(text, "photo");
+    const draft = extractDraftFromPlainText(text, "file");
     if (!draft.title || draft.title === "Imported recipe") {
       draft.title = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
     }
@@ -405,7 +450,7 @@ export async function extractDraftFromPhotoViaApi(
 ): Promise<RecipeDraft> {
   const dataUrl = await readFileAsDataUrl(file);
   const result = await extractPhoto(dataUrl);
-  const draft = createEmptyDraft("photo");
+  const draft = createEmptyDraft("file");
   draft.title = result.title || file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
   draft.summary = result.summary;
   draft.ingredientsText = result.ingredients.join("\n");

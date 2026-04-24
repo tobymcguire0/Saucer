@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +28,13 @@ vi.mock("../src/lib/persistence", async (importOriginal) => {
   return { ...original, canUseTauri: canUseTauriMock };
 });
 
+// Prevent the sync effect from bootstrapping or polling — it would reset connected: false
+// via real network requests and interfere with tests that need connected: true.
+vi.mock("../src/features/sync/useSyncEffect", () => ({
+  useSyncEffect: () => {},
+}));
+
+import { useSyncStore } from "../src/features/sync/useSyncStore";
 import { renderApp, resetMockAuth } from "./renderApp";
 
 describe("upload inputs", () => {
@@ -36,6 +43,7 @@ describe("upload inputs", () => {
     invokeMock.mockReset();
     canUseTauriMock.mockReturnValue(false);
     resetMockAuth();
+    useSyncStore.setState({ connected: false, cursor: null, client: null });
   });
 
   afterEach(() => {
@@ -112,6 +120,10 @@ describe("upload inputs", () => {
       expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
+    // Mark as connected to bypass the 5-second offline-warning delay in importFromWebsite.
+    // useSyncEffect is mocked to a no-op so bootstrap() never resets this.
+    useSyncStore.setState({ connected: true, cursor: null, client: null });
+
     await user.click(screen.getByRole("button", { name: "Upload Recipe" }));
     await user.type(screen.getByPlaceholderText("https://example.com/recipe"), "https://example.com/recipe");
     await user.click(screen.getByRole("button", { name: "Import" }));
@@ -143,6 +155,10 @@ describe("upload inputs", () => {
       expect(screen.getByText("Saucer loaded from local Obsidian-style storage.")).toBeTruthy(),
     );
 
+    // Mark as connected to bypass the 5-second offline-warning delay in importFromWebsite.
+    // useSyncEffect is mocked to a no-op so bootstrap() never resets this.
+    useSyncStore.setState({ connected: true, cursor: null, client: null });
+
     await user.click(screen.getByRole("button", { name: "Upload Recipe" }));
     await user.type(screen.getByPlaceholderText("https://example.com/recipe"), "https://bad.example.com");
     await user.click(screen.getByRole("button", { name: "Import" }));
@@ -157,7 +173,7 @@ describe("upload inputs", () => {
     expect(screen.getByTestId("upload-content").getAttribute("data-upload-error")).toBe("true");
   });
 
-  it("hydrates the draft fields after uploading a text recipe file", async () => {
+  it("hydrates the draft fields after pasting recipe text", async () => {
     const user = userEvent.setup();
 
     renderApp();
@@ -171,35 +187,31 @@ describe("upload inputs", () => {
 
     expect(screen.queryByLabelText("Title")).toBeNull();
 
-    const fileInput = screen.getByLabelText("Upload Text");
-    const file = new File(
-      [
-        `Lemon Pasta
-Bright and quick dinner.
+    const textarea = screen.getByPlaceholderText("Paste or type your recipe here...");
+    const recipeText = [
+      "Lemon Pasta",
+      "Bright and quick dinner.",
+      "",
+      "Serves: 4 people",
+      "",
+      "Ingredients",
+      "- 300g spaghetti",
+      "- 2 lemons",
+      "- 60g parmesan",
+      "",
+      "Instructions",
+      "1. Cook the pasta.",
+      "2. Mix with lemon and parmesan.",
+    ].join("\n");
 
-Serves: 4 people
-
-Ingredients
-- 300g spaghetti
-- 2 lemons
-- 60g parmesan
-
-Instructions
-1. Cook the pasta.
-2. Mix with lemon and parmesan.
-`,
-      ],
-      "lemon-pasta.txt",
-      { type: "text/plain" },
-    );
-
-    await user.upload(fileInput, file);
+    fireEvent.change(textarea, { target: { value: recipeText } });
+    await user.click(screen.getByRole("button", { name: "Import" }));
 
     await waitFor(() => expect(screen.getByDisplayValue("Lemon Pasta")).toBeTruthy());
 
     expect(screen.queryByText("Source Type")).toBeNull();
     expect(screen.getByDisplayValue("Bright and quick dinner.")).toBeTruthy();
-    expect(screen.getByDisplayValue("lemon-pasta.txt")).toBeTruthy();
+    expect(screen.getByDisplayValue("Pasted text")).toBeTruthy();
     expect(screen.getByDisplayValue(/300g spaghetti/)).toBeTruthy();
     expect(screen.getByDisplayValue(/1\. Cook the pasta\./)).toBeTruthy();
 

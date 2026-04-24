@@ -25,6 +25,7 @@ function RecipeEditorModal() {
     selectSourceType,
     importFromWebsite,
     importFromFile,
+    importFromText,
     toggleDraftTag,
     createDraftTag,
     saveDraft,
@@ -75,6 +76,7 @@ function RecipeEditorModal() {
             selectSourceType={selectSourceType}
             importFromWebsite={importFromWebsite}
             importFromFile={importFromFile}
+            importFromText={importFromText}
           />
         ) : null}
 

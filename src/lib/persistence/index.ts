@@ -74,7 +74,9 @@ function parseFrontmatterValue(raw: string) {
 }
 
 function parseSourceType(value: string | string[] | undefined) {
-  return typeof value === "string" && isSourceType(value) ? value : "manual";
+  if (typeof value !== "string") return "manual";
+  const normalized = value === "photo" ? "file" : value;
+  return isSourceType(normalized) ? normalized : "manual";
 }
 
 function parseFrontmatterString(frontmatter: Map<string, string | string[]>, key: string) {

@@ -28,7 +28,7 @@ import type { RecipeDraft } from "../src/lib/models";
 const importedPhotoDraft: RecipeDraft = {
   title: "Toast",
   summary: "Simple toast.",
-  sourceType: "photo",
+  sourceType: "file",
   sourceRef: "toast.png",
   heroImage: "data:image/png;base64,abc",
   ingredientsText: "2 slices bread",
@@ -63,13 +63,13 @@ describe("useRecipeEditorStore", () => {
 
     useSyncStore.getState().setClient(new ApiClient(() => "token"));
     useSyncStore.getState().setConnected(false);
-    useRecipeEditorStore.getState().openCreateEditor("photo");
+    useRecipeEditorStore.getState().openCreateEditor("file");
 
     const file = new File(["fake-image"], "toast.png", { type: "image/png" });
     await useRecipeEditorStore.getState().importFromFile(file);
 
     expect(importRecipeDraftFromFileMock).toHaveBeenCalledTimes(1);
-    expect(importRecipeDraftFromFileMock).toHaveBeenCalledWith(file, "photo", undefined, undefined);
+    expect(importRecipeDraftFromFileMock).toHaveBeenCalledWith(file, "file", undefined, undefined);
     expect(useStatusStore.getState().statusMessage).toBe("toast.png imported into the review form.");
   });
 });

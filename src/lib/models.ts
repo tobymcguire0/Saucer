@@ -1,4 +1,4 @@
-export const sourceTypes = ["website", "photo", "text", "manual"] as const;
+export const sourceTypes = ["website", "file", "text", "manual"] as const;
 export type SourceType = (typeof sourceTypes)[number];
 
 export const recipeSortOptions = ["updated", "title", "rating", "cuisine", "mealType"] as const;

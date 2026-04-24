@@ -1,7 +1,9 @@
 import type { ApiPhotoExtraction } from "../../lib/apiClient";
 import {
+  extractDraftFromPdfFile,
   extractDraftFromPhoto,
   extractDraftFromPhotoViaApi,
+  extractDraftFromRawText,
   extractDraftFromTextFile,
   extractDraftFromWebsite,
   type TextExtractor,
@@ -37,17 +39,36 @@ export async function importRecipeDraftFromWebsite(
   return extractDraftFromWebsite(normalizeWebsiteImportUrl(value), extractText, fetchPage);
 }
 
+function isImageFile(file: File) {
+  return file.type.startsWith("image/");
+}
+
+function isPdfFile(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+export async function importRecipeDraftFromText(text: string, extractText?: TextExtractor) {
+  if (!text.trim()) throw new Error("Paste or type recipe text before importing.");
+  return extractDraftFromRawText(text, extractText);
+}
+
 export async function importRecipeDraftFromFile(
   file: File,
   sourceType: SourceType,
   extractPhoto?: (dataUrl: string) => Promise<ApiPhotoExtraction>,
   extractText?: TextExtractor,
 ) {
-  if (sourceType === "photo") {
-    if (extractPhoto) {
-      return extractDraftFromPhotoViaApi(file, extractPhoto);
+  if (sourceType === "file") {
+    if (isImageFile(file)) {
+      if (extractPhoto) {
+        return extractDraftFromPhotoViaApi(file, extractPhoto);
+      }
+      return extractDraftFromPhoto(file);
     }
-    return extractDraftFromPhoto(file);
+    if (isPdfFile(file)) {
+      return extractDraftFromPdfFile(file, extractText);
+    }
+    return extractDraftFromTextFile(file, extractText);
   }
   return extractDraftFromTextFile(file, extractText);
 }

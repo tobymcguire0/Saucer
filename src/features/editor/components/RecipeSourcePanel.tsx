@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { cn } from "../../../lib/cn";
 import type { RecipeDraft } from "../../../lib/models";
@@ -15,6 +15,7 @@ type RecipeSourcePanelProps = {
   selectSourceType: (sourceType: RecipeDraft["sourceType"]) => void;
   importFromWebsite: () => Promise<void>;
   importFromFile: (file: File | undefined) => Promise<void>;
+  importFromText: (text: string) => Promise<void>;
 };
 
 function RecipeSourcePanel({
@@ -28,6 +29,7 @@ function RecipeSourcePanel({
   selectSourceType,
   importFromWebsite,
   importFromFile,
+  importFromText,
 }: RecipeSourcePanelProps) {
   return (
     <section className="rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
@@ -91,12 +93,19 @@ function RecipeSourcePanel({
             </div>
           ) : null}
 
-          {draft.sourceType === "photo" || draft.sourceType === "text" ? (
+          {draft.sourceType === "file" ? (
             <FileUploadButton
-              sourceType={draft.sourceType}
               isImporting={isImporting}
               clearUploadError={clearUploadError}
               importFromFile={importFromFile}
+            />
+          ) : null}
+
+          {draft.sourceType === "text" ? (
+            <TextInputArea
+              isImporting={isImporting}
+              clearUploadError={clearUploadError}
+              importFromText={importFromText}
             />
           ) : null}
         </div>
@@ -106,19 +115,15 @@ function RecipeSourcePanel({
 }
 
 function FileUploadButton({
-  sourceType,
   isImporting,
   clearUploadError,
   importFromFile,
 }: {
-  sourceType: "photo" | "text";
   isImporting: boolean;
   clearUploadError: () => void;
   importFromFile: (file: File | undefined) => Promise<void>;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const label = sourceType === "photo" ? "Upload Image" : "Upload Text";
-  const accept = sourceType === "photo" ? "image/*" : ".txt,.md,.rtf";
 
   return (
     <div className="flex justify-center">
@@ -128,19 +133,56 @@ function FileUploadButton({
         disabled={isImporting}
         onClick={() => fileInputRef.current?.click()}
       >
-        {isImporting ? "Processing..." : label}
+        {isImporting ? "Processing..." : "Upload File"}
       </button>
       <input
         ref={fileInputRef}
         type="file"
-        aria-label={label}
+        aria-label="Upload File"
         style={{ position: "absolute", width: 0, height: 0, opacity: 0 }}
-        accept={accept}
+        accept="image/*,.txt,.md,.rtf,.pdf"
         onChange={(event) => {
           clearUploadError();
           void importFromFile(event.currentTarget.files?.[0]);
         }}
       />
+    </div>
+  );
+}
+
+function TextInputArea({
+  isImporting,
+  clearUploadError,
+  importFromText,
+}: {
+  isImporting: boolean;
+  clearUploadError: () => void;
+  importFromText: (text: string) => Promise<void>;
+}) {
+  const [text, setText] = useState("");
+
+  return (
+    <div className="flex flex-col gap-3">
+      <textarea
+        className="field-input min-h-[8rem] resize-y"
+        value={text}
+        placeholder="Paste or type your recipe here..."
+        disabled={isImporting}
+        onChange={(event) => {
+          clearUploadError();
+          setText(event.currentTarget.value);
+        }}
+      />
+      <div className="flex justify-center">
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={isImporting || !text.trim()}
+          onClick={() => void importFromText(text)}
+        >
+          {isImporting ? "Importing..." : "Import"}
+        </button>
+      </div>
     </div>
   );
 }

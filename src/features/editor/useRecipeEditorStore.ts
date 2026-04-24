@@ -11,7 +11,11 @@ import {
 import { useSaucerStore } from "../saucer/useSaucerStore";
 import { useStatusStore } from "../status/useStatusStore";
 import { useTaxonomyUiStore } from "../taxonomy/useTaxonomyUiStore";
-import { importRecipeDraftFromFile, importRecipeDraftFromWebsite } from "./recipeImportService";
+import {
+  importRecipeDraftFromFile,
+  importRecipeDraftFromText,
+  importRecipeDraftFromWebsite,
+} from "./recipeImportService";
 import type { RecipeEditorMode } from "./types";
 
 function createInitialState() {
@@ -38,6 +42,7 @@ type RecipeEditorStoreState = ReturnType<typeof createInitialState> & {
   selectSourceType: (sourceType: SourceType) => void;
   importFromWebsite: () => Promise<void>;
   importFromFile: (file: File | undefined) => Promise<void>;
+  importFromText: (text: string) => Promise<void>;
   toggleDraftTag: (tagId: string) => void;
   createDraftTag: (categoryId: string, inputValue: string) => Promise<void>;
   saveDraft: () => Promise<void>;
@@ -232,7 +237,7 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
         : undefined;
 
       let importedDraft: RecipeDraft;
-      if (draft.sourceType === "photo" && extractPhoto) {
+      if (draft.sourceType === "file" && extractPhoto) {
         try {
           importedDraft = await importRecipeDraftFromFile(file, draft.sourceType, extractPhoto);
         } catch (apiErr) {
@@ -260,6 +265,48 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
         uploadShakeActive: false,
       });
       useStatusStore.getState().updateStatus(`${file.name} imported into the review form.`, "success");
+    } catch (error) {
+      set({ uploadErrorActive: true, uploadShakeActive: true });
+      useStatusStore.getState().updateStatus(
+        `Import failed: ${error instanceof Error ? error.message : "unknown error"}`,
+        "error",
+      );
+      setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
+    } finally {
+      set({ isImporting: false });
+    }
+  },
+  importFromText: async (text) => {
+    set({ isImporting: true, uploadErrorActive: false, uploadShakeActive: false });
+    useStatusStore.getState().updateStatus("Importing pasted recipe text...", "info");
+
+    try {
+      const { useSyncStore } = await import("../sync/useSyncStore");
+      const { client: syncClient, connected } = useSyncStore.getState();
+      const connectedClient = connected ? syncClient : null;
+
+      if (!connected) {
+        set({ uploadErrorActive: true, uploadShakeActive: true });
+        useStatusStore.getState().updateStatus("Server offline — importing with local processing.", "error");
+        setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
+      }
+
+      const extractText = connectedClient
+        ? (t: string) => connectedClient.extractRecipeText(t)
+        : undefined;
+
+      const importedDraft = await importRecipeDraftFromText(text, extractText);
+      const taxonomy = useSaucerStore.getState().taxonomy;
+      const autoSelectedTagIds = getAutoSelectedDraftTagIds(buildSuggestions(importedDraft, taxonomy));
+
+      set({
+        draft: { ...importedDraft, selectedTagIds: autoSelectedTagIds },
+        draftImported: true,
+        showSourceControls: false,
+        uploadErrorActive: false,
+        uploadShakeActive: false,
+      });
+      useStatusStore.getState().updateStatus("Recipe text imported into the review form.", "success");
     } catch (error) {
       set({ uploadErrorActive: true, uploadShakeActive: true });
       useStatusStore.getState().updateStatus(

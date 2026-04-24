@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
+    "preview": "npm run build && wrangler dev",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
     "format": "biome format --write .",
@@ -16,7 +16,8 @@
     "server:check": "npm --prefix server run check",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm run test",
     "check:all": "npm run check && npm run server:check",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.6",
+    "@cloudflare/vite-plugin": "^1.33.2",
     "@tailwindcss/vite": "^4.1.14",
     "@tauri-apps/cli": "^2",
     "@testing-library/react": "^16.3.2",
@@ -42,6 +44,7 @@
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "^4.85.0"
   }
 }

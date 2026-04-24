@@ -23,7 +23,7 @@ function BrowseWorkspace() {
               <h3 className="text-xl font-semibold text-text-60">{section.label}</h3>
               <span className="text-sm font-medium text-text-35">{section.recipes.length} recipes</span>
             </div>
-            <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,.5fr))]">
               {section.recipes.map((recipe) => (
                 <RecipeCard
                   key={recipe.id}
@@ -44,7 +44,7 @@ function BrowseWorkspace() {
   }
 
   return (
-    <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
+    <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,.5fr))]">
       {visibleRecipes.map((recipe) => (
         <RecipeCard
           key={recipe.id}

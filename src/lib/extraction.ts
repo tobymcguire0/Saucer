@@ -234,6 +234,32 @@ export function parseDraftFromWebsiteHtml(
   const document = parser.parseFromString(html, "text/html");
   const draft = createEmptyDraft("website");
   draft.sourceRef = sourceUrl;
+
+  // LLM extraction on the page body text before falling back to heuristics.
+  const heroImage = extractImageUrl(
+    document.querySelector('meta[property="og:image"]')?.getAttribute("content") ?? "",
+    sourceUrl,
+  );
+  const validatedHeroImage = (heroImage && isValidImageUrl(heroImage)) ? heroImage : undefined;
+  if (extractText) {
+    return extractText(document.body.textContent ?? "", document.title)
+      .then((result) => {
+        draft.title = result.title || document.title || "Imported recipe";
+        draft.summary = result.summary;
+        draft.ingredientsText = result.ingredients.join("\n");
+        draft.instructionsText = result.instructions.join("\n");
+        draft.servings = result.servings;
+        draft.cuisine = result.cuisine;
+        draft.mealType = result.mealType;
+        draft.heroImage = validatedHeroImage;
+        return draft;
+      })
+      .catch(async () => {
+        throw new Error("LLM Failed to parse website, using JSON parsing.");
+      });
+  }
+
+  //Fallback to JSON parsing
   const jsonLdRecipe = extractJsonLdRecipe(document);
 
   if (jsonLdRecipe) {
@@ -264,38 +290,6 @@ export function parseDraftFromWebsiteHtml(
       toText(jsonLdRecipe.recipeCategory) ||
       (document.body.textContent ? inferFromKeywords(document.body.textContent, mealTypeHints) : "");
     return draft;
-  }
-
-  // No JSON-LD: try LLM extraction on the page body text before falling back to heuristics.
-  const heroImage = extractImageUrl(
-    document.querySelector('meta[property="og:image"]')?.getAttribute("content") ?? "",
-    sourceUrl,
-  );
-  const validatedHeroImage = (heroImage && isValidImageUrl(heroImage)) ? heroImage : undefined;
-  if (extractText) {
-    return extractText(document.body.textContent ?? "", document.title)
-      .then((result) => {
-        draft.title = result.title || document.title || "Imported recipe";
-        draft.summary = result.summary;
-        draft.ingredientsText = result.ingredients.join("\n");
-        draft.instructionsText = result.instructions.join("\n");
-        draft.servings = result.servings;
-        draft.cuisine = result.cuisine;
-        draft.mealType = result.mealType;
-        draft.heroImage = validatedHeroImage;
-        return draft;
-      })
-      .catch(() => {
-        // LLM call failed — fall through to heuristic parsing.
-        const fallbackDraft = extractDraftFromPlainText(document.body.textContent ?? "", "website");
-        return {
-          ...fallbackDraft,
-          sourceRef: sourceUrl,
-          title: document.title || fallbackDraft.title,
-          summary: fallbackDraft.summary || "Fallback extraction from page text.",
-          heroImage: validatedHeroImage,
-        };
-      });
   }
 
   const fallbackDraft = extractDraftFromPlainText(document.body.textContent ?? "", "website");

@@ -163,11 +163,13 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
           set({ uploadErrorActive: true, uploadShakeActive: true, isImporting: false });
           useStatusStore.getState().updateStatus("Connect to the server to import from websites.", "error");
           setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
+          await new Promise((resolve) => setTimeout(resolve, 5000));
           return;
         }
         set({ uploadErrorActive: true, uploadShakeActive: true });
         useStatusStore.getState().updateStatus("Server offline — parsing website locally.", "error");
         setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
+        await new Promise((resolve) => setTimeout(resolve, 5000));
       }
 
       const extractText = connectedClient
@@ -197,6 +199,7 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
         "error",
       );
       setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     } finally {
       set({ isImporting: false });
     }

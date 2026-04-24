@@ -152,7 +152,7 @@ function RecipeDetailWorkspace() {
 
       <section className="rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
         <h3 className="text-xl font-semibold text-text-60">Instructions</h3>
-        <ol className="mt-3 space-y-2 pl-5 text-sm leading-6 text-text-45">
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-text-45">
           {recipe.instructions.map((instruction) => (
             <li key={instruction}>{instruction}</li>
           ))}

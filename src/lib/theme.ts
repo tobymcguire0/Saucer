@@ -36,10 +36,10 @@ export type ThemeScale = Record<ThemeScaleStep, string>;
 export type ThemeTokens = Record<ThemeFamily, ThemeScale>;
 
 export const defaultThemePalette: ThemePalette = {
-  primary: "#F97316",
-  accent: "#61cc4f",
+  primary: "#101050",
+  accent: "#6fc45f",
   background: "#CCFBF1",
-  panel: "#0F766E",
+  panel: "#bfc4e1",
   text: "#12343B",
 };
 

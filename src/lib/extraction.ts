@@ -1,10 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import { createWorker } from "tesseract.js";
 
-import type { ApiPhotoExtraction } from "./apiClient";
+import type { ApiPhotoExtraction, ApiPhotoExtractionMulti } from "./apiClient";
 import type { RecipeDraft, SourceType } from "./models";
 import { canUseTauri } from "./persistence";
 import { createEmptyDraft } from "./taxonomy";
+
+export type MultiTextExtractor = (
+  text: string,
+  pageTitle?: string,
+) => Promise<ApiPhotoExtractionMulti>;
+export type MultiPhotoExtractor = (dataUrl: string) => Promise<ApiPhotoExtractionMulti>;
 
 const cuisineHints = [
   "Italian",
@@ -461,4 +467,175 @@ export async function extractDraftFromPhotoViaApi(
   draft.sourceRef = file.name;
   draft.heroImage = dataUrl;
   return draft;
+}
+
+function extractionToDraft(
+  result: ApiPhotoExtraction,
+  sourceType: SourceType,
+  fallbackTitle: string,
+  sourceRef: string,
+  options?: { heroImage?: string; fileName?: string },
+): RecipeDraft {
+  const draft = createEmptyDraft(sourceType);
+  draft.title = result.title || fallbackTitle;
+  draft.summary = result.summary;
+  draft.ingredientsText = result.ingredients.join("\n");
+  draft.instructionsText = result.instructions.join("\n");
+  draft.servings = result.servings;
+  draft.cuisine =
+    result.cuisine ||
+    (options?.fileName ? inferFromKeywords(options.fileName, cuisineHints) : "");
+  draft.mealType =
+    result.mealType ||
+    (options?.fileName ? inferFromKeywords(options.fileName, mealTypeHints) : "");
+  draft.sourceRef = sourceRef;
+  if (options?.heroImage !== undefined) {
+    draft.heroImage = options.heroImage;
+  }
+  return draft;
+}
+
+function fallbackTitleFromFile(file: File) {
+  return file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+}
+
+export async function extractDraftsFromWebsite(
+  url: string,
+  extractText?: MultiTextExtractor,
+  fetchPage?: WebsitePageFetcher,
+): Promise<RecipeDraft[]> {
+  if (!extractText) {
+    return [await extractDraftFromWebsite(url, undefined, fetchPage)];
+  }
+
+  let payload: { url: string; html: string };
+  if (canUseTauri()) {
+    payload = await invoke<{ url: string; html: string }>("fetch_recipe_page", { url });
+  } else if (fetchPage) {
+    payload = await fetchPage(url);
+  } else {
+    throw new Error("Connect to the server to import from websites.");
+  }
+
+  const parser = new DOMParser();
+  const document = parser.parseFromString(payload.html, "text/html");
+  const heroImage = extractImageUrl(
+    document.querySelector('meta[property="og:image"]')?.getAttribute("content") ?? "",
+    payload.url || url,
+  );
+  const validatedHeroImage = heroImage && isValidImageUrl(heroImage) ? heroImage : undefined;
+
+  try {
+    const result = await extractText(document.body.textContent ?? "", document.title);
+    if (!Array.isArray(result.recipes) || result.recipes.length === 0) {
+      throw new Error("Empty multi-extraction response");
+    }
+    return result.recipes.map((entry, index) =>
+      extractionToDraft(
+        entry,
+        "website",
+        entry.title || document.title || `Imported recipe ${index + 1}`,
+        payload.url || url,
+        { heroImage: validatedHeroImage },
+      ),
+    );
+  } catch {
+    return [await extractDraftFromWebsite(url, undefined, fetchPage)];
+  }
+}
+
+export async function extractDraftsFromRawText(
+  text: string,
+  extractText?: MultiTextExtractor,
+): Promise<RecipeDraft[]> {
+  if (!extractText) {
+    return [await extractDraftFromRawText(text)];
+  }
+  try {
+    const result = await extractText(text);
+    if (!Array.isArray(result.recipes) || result.recipes.length === 0) {
+      throw new Error("Empty multi-extraction response");
+    }
+    return result.recipes.map((entry, index) =>
+      extractionToDraft(
+        entry,
+        "text",
+        entry.title || `Pasted recipe ${index + 1}`,
+        "Pasted text",
+      ),
+    );
+  } catch {
+    return [await extractDraftFromRawText(text)];
+  }
+}
+
+export async function extractDraftsFromTextFile(
+  file: File,
+  extractText?: MultiTextExtractor,
+): Promise<RecipeDraft[]> {
+  const text = await readFileAsText(file);
+  if (!extractText) {
+    const draft = await extractDraftFromTextFile(file);
+    return [draft];
+  }
+  try {
+    const result = await extractText(text);
+    if (!Array.isArray(result.recipes) || result.recipes.length === 0) {
+      throw new Error("Empty multi-extraction response");
+    }
+    return result.recipes.map((entry, index) =>
+      extractionToDraft(
+        entry,
+        "text",
+        entry.title || `${fallbackTitleFromFile(file)} ${index + 1}`,
+        file.name,
+      ),
+    );
+  } catch {
+    return [await extractDraftFromTextFile(file)];
+  }
+}
+
+export async function extractDraftsFromPdfFile(
+  file: File,
+  extractText?: MultiTextExtractor,
+): Promise<RecipeDraft[]> {
+  const arrayBuffer = await file.arrayBuffer();
+  const { getDocument, GlobalWorkerOptions } = await import("pdfjs-dist");
+  GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url,
+  ).toString();
+  const pdf = await getDocument({ data: arrayBuffer }).promise;
+  const pageContents = await Promise.all(
+    Array.from({ length: pdf.numPages }, (_, i) =>
+      pdf.getPage(i + 1).then((p) => p.getTextContent()),
+    ),
+  );
+  const text = pageContents
+    .flatMap((p) => p.items.map((item) => ("str" in item ? item.str : "")))
+    .join(" ");
+  const drafts = await extractDraftsFromRawText(text, extractText);
+  return drafts.map((draft) => ({ ...draft, sourceRef: file.name, sourceType: "file" }));
+}
+
+export async function extractDraftsFromPhotoViaApi(
+  file: File,
+  extractPhoto: MultiPhotoExtractor,
+): Promise<RecipeDraft[]> {
+  const dataUrl = await readFileAsDataUrl(file);
+  const result = await extractPhoto(dataUrl);
+  if (!Array.isArray(result.recipes) || result.recipes.length === 0) {
+    return [];
+  }
+  const fallbackTitle = fallbackTitleFromFile(file);
+  return result.recipes.map((entry, index) =>
+    extractionToDraft(
+      entry,
+      "file",
+      entry.title || `${fallbackTitle} ${index + 1}`,
+      file.name,
+      { heroImage: dataUrl, fileName: file.name },
+    ),
+  );
 }

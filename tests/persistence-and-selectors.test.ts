@@ -98,6 +98,7 @@ tags: []
         mealType: "Dinner",
         rating: 4,
         tagIds: [dinnerTag?.id ?? ""].filter(Boolean),
+        linkedRecipeIds: [],
         createdAt: now,
         updatedAt: now,
       },

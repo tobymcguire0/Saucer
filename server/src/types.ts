@@ -21,6 +21,7 @@ export interface Recipe {
   mealType?: string;
   rating?: number;
   tagIds?: string[];
+  linkedRecipeIds?: string[];
   createdAt: string;
   updatedAt: string;
   revision: number;

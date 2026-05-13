@@ -42,6 +42,10 @@ export function useRecipeEditorViewModel() {
       importFromText: store.importFromText,
       toggleDraftTag: store.toggleDraftTag,
       createDraftTag: store.createDraftTag,
+      setDraftLinkedRecipes: store.setDraftLinkedRecipes,
+      goToParsedDraft: store.goToParsedDraft,
+      parsedDrafts: store.parsedDrafts,
+      parsedDraftIndex: store.parsedDraftIndex,
       saveDraft: store.saveDraft,
     })),
   );

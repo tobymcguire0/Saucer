@@ -43,6 +43,7 @@ export interface Recipe {
   mealType?: string;
   rating: number;
   tagIds: string[];
+  linkedRecipeIds: string[];
   createdAt: string;
   updatedAt: string;
   revision?: number;
@@ -71,6 +72,7 @@ export interface RecipeDraft {
   cuisine: string;
   mealType: string;
   selectedTagIds: string[];
+  selectedLinkedRecipeIds: string[];
 }
 
 export interface RecipeQuery {

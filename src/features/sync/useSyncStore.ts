@@ -19,6 +19,7 @@ function toClientRecipe(r: ApiRecipe): Recipe {
     mealType: r.mealType,
     rating: r.rating ?? 0,
     tagIds: r.tagIds ?? [],
+    linkedRecipeIds: r.linkedRecipeIds ?? [],
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     revision: r.revision,

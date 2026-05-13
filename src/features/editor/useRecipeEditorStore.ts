@@ -8,13 +8,14 @@ import {
   createEmptyDraft,
   getAutoSelectedDraftTagIds,
 } from "../../lib/taxonomy";
-import { useSaucerStore } from "../saucer/useSaucerStore";
+import { reconcileRecipeLinks, useSaucerStore } from "../saucer/useSaucerStore";
 import { useStatusStore } from "../status/useStatusStore";
 import { useTaxonomyUiStore } from "../taxonomy/useTaxonomyUiStore";
 import {
   importRecipeDraftFromFile,
-  importRecipeDraftFromText,
-  importRecipeDraftFromWebsite,
+  importRecipeDraftsFromFile,
+  importRecipeDraftsFromText,
+  importRecipeDraftsFromWebsite,
 } from "./recipeImportService";
 import type { RecipeEditorMode } from "./types";
 
@@ -28,6 +29,8 @@ function createInitialState() {
     uploadErrorActive: false,
     uploadShakeActive: false,
     isImporting: false,
+    parsedDrafts: [] as RecipeDraft[],
+    parsedDraftIndex: 0,
   };
 }
 
@@ -45,6 +48,9 @@ type RecipeEditorStoreState = ReturnType<typeof createInitialState> & {
   importFromText: (text: string) => Promise<void>;
   toggleDraftTag: (tagId: string) => void;
   createDraftTag: (categoryId: string, inputValue: string) => Promise<void>;
+  toggleDraftLinkedRecipe: (recipeId: string) => void;
+  setDraftLinkedRecipes: (recipeIds: string[]) => void;
+  goToParsedDraft: (index: number) => void;
   saveDraft: () => Promise<void>;
   reset: () => void;
 };
@@ -65,6 +71,7 @@ function toDraft(recipe: Recipe): RecipeDraft {
     cuisine: recipe.cuisine ?? "",
     mealType: recipe.mealType ?? "",
     selectedTagIds: recipe.tagIds,
+    selectedLinkedRecipeIds: recipe.linkedRecipeIds ?? [],
   };
 }
 
@@ -82,11 +89,50 @@ function buildSuggestions(draft: RecipeDraft, taxonomy: Taxonomy) {
   );
 }
 
+function autoTagDraft(draft: RecipeDraft, taxonomy: Taxonomy): RecipeDraft {
+  return {
+    ...draft,
+    selectedTagIds: getAutoSelectedDraftTagIds(buildSuggestions(draft, taxonomy)),
+  };
+}
+
+function applyImportedDrafts(drafts: RecipeDraft[], sourceLabel: string) {
+  const taxonomy = useSaucerStore.getState().taxonomy;
+  const tagged = drafts.map((d) => autoTagDraft(d, taxonomy));
+
+  if (tagged.length > 1) {
+    useRecipeEditorStore.setState({
+      draft: tagged[0],
+      parsedDrafts: tagged,
+      parsedDraftIndex: 0,
+      draftImported: true,
+      showSourceControls: false,
+      uploadErrorActive: false,
+      uploadShakeActive: false,
+    });
+    useStatusStore
+      .getState()
+      .updateStatus(`${sourceLabel} parsed into ${tagged.length} recipes.`, "success");
+    return;
+  }
+
+  useRecipeEditorStore.setState({
+    draft: tagged[0] ?? createEmptyDraft(),
+    parsedDrafts: [],
+    parsedDraftIndex: 0,
+    draftImported: true,
+    showSourceControls: false,
+    uploadErrorActive: false,
+    uploadShakeActive: false,
+  });
+  useStatusStore.getState().updateStatus(`${sourceLabel} imported into the review form.`, "success");
+}
+
 export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) => ({
   ...createInitialState(),
   closeEditor: () => {
     useTaxonomyUiStore.getState().resetCategoryInputs("editor");
-    set({ editorOpen: false });
+    set({ editorOpen: false, parsedDrafts: [], parsedDraftIndex: 0 });
   },
   openCreateEditor: (sourceType) => {
     useTaxonomyUiStore.getState().resetCategoryInputs("editor");
@@ -98,6 +144,8 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       showSourceControls: true,
       uploadErrorActive: false,
       isImporting: false,
+      parsedDrafts: [],
+      parsedDraftIndex: 0,
     });
     useStatusStore
       .getState()
@@ -118,6 +166,8 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       showSourceControls: false,
       uploadErrorActive: false,
       isImporting: false,
+      parsedDrafts: [],
+      parsedDraftIndex: 0,
     });
     useStatusStore.getState().updateStatus(`Editing ${recipe.title}.`, "info");
   },
@@ -145,6 +195,8 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       isImporting: false,
       showSourceControls: true,
       draft: createEmptyDraft(sourceType),
+      parsedDrafts: [],
+      parsedDraftIndex: 0,
     });
     useStatusStore
       .getState()
@@ -178,25 +230,20 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       }
 
       const extractText = connectedClient
-        ? (text: string, pageTitle?: string) => connectedClient.extractRecipeText(text, pageTitle)
+        ? (text: string, pageTitle?: string) =>
+            connectedClient.extractRecipeTextMulti(text, pageTitle)
         : undefined;
 
       const fetchPage = connectedClient
         ? (url: string) => connectedClient.fetchWebsitePage(url)
         : undefined;
 
-      const importedDraft = await importRecipeDraftFromWebsite(draft.sourceRef, extractText, fetchPage);
-      const taxonomy = useSaucerStore.getState().taxonomy;
-      const autoSelectedTagIds = getAutoSelectedDraftTagIds(buildSuggestions(importedDraft, taxonomy));
-
-      set({
-        draft: { ...importedDraft, selectedTagIds: autoSelectedTagIds },
-        draftImported: true,
-        showSourceControls: false,
-        uploadErrorActive: false,
-        uploadShakeActive: false,
-      });
-      useStatusStore.getState().updateStatus("Website recipe imported into the review form.", "success");
+      const importedDrafts = await importRecipeDraftsFromWebsite(
+        draft.sourceRef,
+        extractText,
+        fetchPage,
+      );
+      applyImportedDrafts(importedDrafts, "Website recipe");
     } catch (error) {
       set({ uploadErrorActive: true, uploadShakeActive: true });
       useStatusStore.getState().updateStatus(
@@ -230,16 +277,20 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       }
 
       const extractPhoto = connectedClient
-        ? (dataUrl: string) => connectedClient.extractPhoto(dataUrl)
+        ? (dataUrl: string) => connectedClient.extractPhotoMulti(dataUrl)
         : undefined;
       const extractText = connectedClient
-        ? (text: string) => connectedClient.extractRecipeText(text)
+        ? (text: string) => connectedClient.extractRecipeTextMulti(text)
         : undefined;
 
-      let importedDraft: RecipeDraft;
+      let importedDrafts: RecipeDraft[];
       if (draft.sourceType === "file" && extractPhoto) {
         try {
-          importedDraft = await importRecipeDraftFromFile(file, draft.sourceType, extractPhoto);
+          importedDrafts = await importRecipeDraftsFromFile(
+            file,
+            draft.sourceType,
+            extractPhoto,
+          );
         } catch (apiErr) {
           useStatusStore.getState().updateStatus(
             `AI photo extraction failed — falling back to local OCR in 5 seconds. (${apiErr instanceof Error ? apiErr.message : "unknown"})`,
@@ -248,23 +299,18 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
           set({ uploadShakeActive: true });
           setTimeout(() => useRecipeEditorStore.setState({ uploadShakeActive: false }), 600);
           await new Promise((resolve) => setTimeout(resolve, 5000));
-          importedDraft = await importRecipeDraftFromFile(file, draft.sourceType);
+          importedDrafts = [await importRecipeDraftFromFile(file, draft.sourceType)];
         }
       } else {
-        importedDraft = await importRecipeDraftFromFile(file, draft.sourceType, undefined, extractText);
+        importedDrafts = await importRecipeDraftsFromFile(
+          file,
+          draft.sourceType,
+          undefined,
+          extractText,
+        );
       }
 
-      const taxonomy = useSaucerStore.getState().taxonomy;
-      const autoSelectedTagIds = getAutoSelectedDraftTagIds(buildSuggestions(importedDraft, taxonomy));
-
-      set({
-        draft: { ...importedDraft, selectedTagIds: autoSelectedTagIds },
-        draftImported: true,
-        showSourceControls: false,
-        uploadErrorActive: false,
-        uploadShakeActive: false,
-      });
-      useStatusStore.getState().updateStatus(`${file.name} imported into the review form.`, "success");
+      applyImportedDrafts(importedDrafts, file.name);
     } catch (error) {
       set({ uploadErrorActive: true, uploadShakeActive: true });
       useStatusStore.getState().updateStatus(
@@ -292,21 +338,11 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       }
 
       const extractText = connectedClient
-        ? (t: string) => connectedClient.extractRecipeText(t)
+        ? (t: string) => connectedClient.extractRecipeTextMulti(t)
         : undefined;
 
-      const importedDraft = await importRecipeDraftFromText(text, extractText);
-      const taxonomy = useSaucerStore.getState().taxonomy;
-      const autoSelectedTagIds = getAutoSelectedDraftTagIds(buildSuggestions(importedDraft, taxonomy));
-
-      set({
-        draft: { ...importedDraft, selectedTagIds: autoSelectedTagIds },
-        draftImported: true,
-        showSourceControls: false,
-        uploadErrorActive: false,
-        uploadShakeActive: false,
-      });
-      useStatusStore.getState().updateStatus("Recipe text imported into the review form.", "success");
+      const importedDrafts = await importRecipeDraftsFromText(text, extractText);
+      applyImportedDrafts(importedDrafts, "Recipe text");
     } catch (error) {
       set({ uploadErrorActive: true, uploadShakeActive: true });
       useStatusStore.getState().updateStatus(
@@ -348,9 +384,101 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
 
     useTaxonomyUiStore.getState().setCategoryInput("editor", categoryId, "");
   },
+  toggleDraftLinkedRecipe: (recipeId) =>
+    set((state) => {
+      const current = state.draft.selectedLinkedRecipeIds ?? [];
+      const next = current.includes(recipeId)
+        ? current.filter((id) => id !== recipeId)
+        : [...current, recipeId];
+      return { draft: { ...state.draft, selectedLinkedRecipeIds: next } };
+    }),
+  setDraftLinkedRecipes: (recipeIds) =>
+    set((state) => ({
+      draft: {
+        ...state.draft,
+        selectedLinkedRecipeIds: [...new Set(recipeIds)],
+      },
+    })),
+  goToParsedDraft: (index) =>
+    set((state) => {
+      if (state.parsedDrafts.length <= 1) return state;
+      if (index < 0 || index >= state.parsedDrafts.length) return state;
+      const persisted = state.parsedDrafts.map((entry, i) =>
+        i === state.parsedDraftIndex ? state.draft : entry,
+      );
+      return {
+        ...state,
+        parsedDrafts: persisted,
+        parsedDraftIndex: index,
+        draft: persisted[index],
+      };
+    }),
   saveDraft: async () => {
-    const { draft, editorMode } = get();
+    const { draft, editorMode, parsedDrafts, parsedDraftIndex } = get();
     const { recipes, taxonomy, replaceAll } = useSaucerStore.getState();
+    const { useSyncStore } = await import("../sync/useSyncStore");
+
+    if (parsedDrafts.length > 1 && editorMode === "create") {
+      const allDrafts = parsedDrafts.map((entry, i) => (i === parsedDraftIndex ? draft : entry));
+      const newRecipes: Recipe[] = allDrafts.map((entry) => {
+        const suggestions = buildSuggestions(entry, taxonomy);
+        const autoTagIds = getAutoSelectedDraftTagIds(suggestions);
+        return convertDraftToRecipe({
+          ...entry,
+          selectedTagIds: entry.selectedTagIds.length > 0 ? entry.selectedTagIds : autoTagIds,
+        });
+      });
+
+      const newIds = newRecipes.map((r) => r.id);
+      const linked: Recipe[] = newRecipes.map((r) => ({
+        ...r,
+        linkedRecipeIds: [
+          ...new Set([
+            ...r.linkedRecipeIds,
+            ...newIds.filter((id) => id !== r.id),
+          ]),
+        ],
+      }));
+
+      for (const r of linked) {
+        if (!recipes.find((existing) => existing.id === r.id)) {
+          useSaucerStore.getState().markRecipeAsLocal(r.id);
+        }
+      }
+
+      const { recipes: reconciledRecipes, touchedIds } = reconcileRecipeLinks(recipes, linked);
+
+      await replaceAll(
+        reconciledRecipes,
+        taxonomy,
+        `${linked.length} recipes created and linked.`,
+      );
+
+      for (const id of touchedIds) {
+        const updated = reconciledRecipes.find((r) => r.id === id);
+        if (!updated) continue;
+        const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = updated;
+        void useSyncStore.getState().pushMutation({
+          type: "upsertRecipe",
+          clientMutationId: crypto.randomUUID(),
+          recipe: recipeInput,
+        });
+      }
+
+      useTaxonomyUiStore.getState().resetCategoryInputs("editor");
+      set({
+        editorOpen: false,
+        draft: createEmptyDraft(),
+        draftImported: false,
+        showSourceControls: true,
+        uploadErrorActive: false,
+        isImporting: false,
+        parsedDrafts: [],
+        parsedDraftIndex: 0,
+      });
+      return;
+    }
+
     const draftSuggestions = buildSuggestions(draft, taxonomy);
     const autoTagIds = getAutoSelectedDraftTagIds(draftSuggestions);
     const baseRecipe = convertDraftToRecipe({
@@ -369,27 +497,34 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
         }
       : baseRecipe;
 
-    const nextRecipes = existingRecipe
+    const seedRecipes = existingRecipe
       ? recipes.map((recipe) => (recipe.id === nextRecipe.id ? nextRecipe : recipe))
       : [nextRecipe, ...recipes];
+
+    const { recipes: reconciledRecipes, touchedIds } = reconcileRecipeLinks(seedRecipes, [
+      nextRecipe,
+    ]);
 
     if (!existingRecipe) {
       useSaucerStore.getState().markRecipeAsLocal(nextRecipe.id);
     }
 
     await replaceAll(
-      nextRecipes,
+      reconciledRecipes,
       taxonomy,
       editorMode === "edit" ? "Recipe updated." : "Recipe created and indexed.",
     );
 
-    const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = nextRecipe;
-    const { useSyncStore } = await import("../sync/useSyncStore");
-    void useSyncStore.getState().pushMutation({
-      type: "upsertRecipe",
-      clientMutationId: crypto.randomUUID(),
-      recipe: recipeInput,
-    });
+    for (const id of touchedIds) {
+      const updated = reconciledRecipes.find((r) => r.id === id);
+      if (!updated) continue;
+      const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = updated;
+      void useSyncStore.getState().pushMutation({
+        type: "upsertRecipe",
+        clientMutationId: crypto.randomUUID(),
+        recipe: recipeInput,
+      });
+    }
 
     useTaxonomyUiStore.getState().resetCategoryInputs("editor");
     set({
@@ -399,6 +534,8 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       showSourceControls: true,
       uploadErrorActive: false,
       isImporting: false,
+      parsedDrafts: [],
+      parsedDraftIndex: 0,
     });
   },
   reset: () => set(createInitialState()),

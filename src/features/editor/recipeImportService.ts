@@ -6,10 +6,17 @@ import {
   extractDraftFromRawText,
   extractDraftFromTextFile,
   extractDraftFromWebsite,
+  extractDraftsFromPdfFile,
+  extractDraftsFromPhotoViaApi,
+  extractDraftsFromRawText,
+  extractDraftsFromTextFile,
+  extractDraftsFromWebsite,
+  type MultiPhotoExtractor,
+  type MultiTextExtractor,
   type TextExtractor,
   type WebsitePageFetcher,
 } from "../../lib/extraction";
-import type { SourceType } from "../../lib/models";
+import type { RecipeDraft, SourceType } from "../../lib/models";
 
 export function normalizeWebsiteImportUrl(value: string) {
   const trimmed = value.trim();
@@ -71,4 +78,42 @@ export async function importRecipeDraftFromFile(
     return extractDraftFromTextFile(file, extractText);
   }
   return extractDraftFromTextFile(file, extractText);
+}
+
+export async function importRecipeDraftsFromWebsite(
+  value: string,
+  extractText?: MultiTextExtractor,
+  fetchPage?: WebsitePageFetcher,
+): Promise<RecipeDraft[]> {
+  return extractDraftsFromWebsite(normalizeWebsiteImportUrl(value), extractText, fetchPage);
+}
+
+export async function importRecipeDraftsFromText(
+  text: string,
+  extractText?: MultiTextExtractor,
+): Promise<RecipeDraft[]> {
+  if (!text.trim()) throw new Error("Paste or type recipe text before importing.");
+  return extractDraftsFromRawText(text, extractText);
+}
+
+export async function importRecipeDraftsFromFile(
+  file: File,
+  sourceType: SourceType,
+  extractPhoto?: MultiPhotoExtractor,
+  extractText?: MultiTextExtractor,
+): Promise<RecipeDraft[]> {
+  if (sourceType === "file") {
+    if (isImageFile(file)) {
+      if (extractPhoto) {
+        return extractDraftsFromPhotoViaApi(file, extractPhoto);
+      }
+      const draft = await extractDraftFromPhoto(file);
+      return [draft];
+    }
+    if (isPdfFile(file)) {
+      return extractDraftsFromPdfFile(file, extractText);
+    }
+    return extractDraftsFromTextFile(file, extractText);
+  }
+  return extractDraftsFromTextFile(file, extractText);
 }

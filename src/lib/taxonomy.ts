@@ -597,6 +597,7 @@ export function convertDraftToRecipe(draft: RecipeDraft) {
     mealType: draft.mealType.trim() || undefined,
     rating: 0,
     tagIds: [...new Set(draft.selectedTagIds)],
+    linkedRecipeIds: [...new Set(draft.selectedLinkedRecipeIds ?? [])],
     createdAt: now,
     updatedAt: now,
   };
@@ -615,6 +616,7 @@ export function createEmptyDraft(sourceType: RecipeDraft["sourceType"] = "manual
     cuisine: "",
     mealType: "",
     selectedTagIds: [],
+    selectedLinkedRecipeIds: [],
   };
 }
 

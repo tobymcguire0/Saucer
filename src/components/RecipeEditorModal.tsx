@@ -1,8 +1,11 @@
+import ParsedRecipesHeader from "../features/editor/components/ParsedRecipesHeader";
 import RecipeDraftFields from "../features/editor/components/RecipeDraftFields";
+import RecipeLinkedRecipesPanel from "../features/editor/components/RecipeLinkedRecipesPanel";
 import RecipeSourcePanel from "../features/editor/components/RecipeSourcePanel";
 import RecipeSuggestionPanel from "../features/editor/components/RecipeSuggestionPanel";
 import RecipeTagAssignmentPanel from "../features/editor/components/RecipeTagAssignmentPanel";
 import { useRecipeEditorModalViewModel } from "../features/editor/useRecipeEditorModalViewModel";
+import { useSaucerStore } from "../features/saucer/useSaucerStore";
 
 function RecipeEditorModal() {
   const {
@@ -28,6 +31,10 @@ function RecipeEditorModal() {
     importFromText,
     toggleDraftTag,
     createDraftTag,
+    setDraftLinkedRecipes,
+    goToParsedDraft,
+    parsedDrafts,
+    parsedDraftIndex,
     saveDraft,
     editorCategoryInputs,
     setEditorCategoryInput,
@@ -35,14 +42,18 @@ function RecipeEditorModal() {
     taxonomyGroups,
     categoryLookup,
   } = useRecipeEditorModalViewModel();
+  const allRecipes = useSaucerStore((state) => state.recipes);
 
   if (!editorOpen) {
     return null;
   }
 
+  const isMultiDraft = parsedDrafts.length > 1 && editorMode === "create";
+  const isLastDraft = isMultiDraft && parsedDraftIndex === parsedDrafts.length - 1;
+
   return (
-    <div className="fixed inset-0 z-20 grid place-items-center bg-text-100/55 p-6 backdrop-blur-sm">
-      <section className="max-h-[calc(100vh-3rem)] w-full max-w-[1080px] space-y-5 overflow-auto rounded-[var(--radius-card)] border border-panel-20 bg-background-0 p-5 shadow-[var(--shadow-floating)]">
+    <div className="fixed inset-0 z-20 grid place-items-center bg-text-100/55 p-6 pb-24 backdrop-blur-sm">
+      <section className="max-h-[calc(100vh-9rem)] w-full max-w-[1080px] space-y-5 overflow-auto rounded-[var(--radius-card)] border border-panel-20 bg-background-0 p-5 shadow-[var(--shadow-floating)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary-60">
@@ -80,6 +91,14 @@ function RecipeEditorModal() {
           />
         ) : null}
 
+        {showDraftForm && isMultiDraft ? (
+          <ParsedRecipesHeader
+            drafts={parsedDrafts}
+            currentIndex={parsedDraftIndex}
+            onSelect={goToParsedDraft}
+          />
+        ) : null}
+
         {showDraftForm ? <RecipeDraftFields draft={draft} updateDraft={updateDraft} /> : null}
 
         {showDraftForm ? (
@@ -103,11 +122,46 @@ function RecipeEditorModal() {
           />
         ) : null}
 
+        {showDraftForm && !isMultiDraft ? (
+          <RecipeLinkedRecipesPanel
+            draft={draft}
+            allRecipes={allRecipes}
+            setDraftLinkedRecipes={setDraftLinkedRecipes}
+          />
+        ) : null}
+
         {showDraftForm ? (
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" className="btn-primary" onClick={() => void saveDraft()}>
-              {editorMode === "edit" ? "Save recipe" : "Create recipe"}
-            </button>
+            {isMultiDraft ? (
+              <>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={parsedDraftIndex === 0}
+                  onClick={() => goToParsedDraft(parsedDraftIndex - 1)}
+                >
+                  Previous Recipe
+                </button>
+                {!isLastDraft ? (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => goToParsedDraft(parsedDraftIndex + 1)}
+                  >
+                    Next Recipe
+                  </button>
+                ) : null}
+                {isLastDraft ? (
+                  <button type="button" className="btn-primary" onClick={() => void saveDraft()}>
+                    Create Recipe
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <button type="button" className="btn-primary" onClick={() => void saveDraft()}>
+                {editorMode === "edit" ? "Save recipe" : "Create recipe"}
+              </button>
+            )}
           </div>
         ) : null}
       </section>

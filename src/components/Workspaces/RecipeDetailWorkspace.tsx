@@ -5,8 +5,17 @@ import StarRating from "../StarRating";
 import { sortTagIdsForPreview } from "../recipeTagPreview";
 
 function RecipeDetailWorkspace() {
-  const { recipe, closeRecipeDetail, deleteRecipe, updateRecipeRating, openEditEditor, tagLookup, categoryLookup } =
-    useRecipeDetailViewModel();
+  const {
+    recipe,
+    closeRecipeDetail,
+    deleteRecipe,
+    updateRecipeRating,
+    openEditEditor,
+    tagLookup,
+    categoryLookup,
+    linkedRecipes,
+    openRecipeDetail,
+  } = useRecipeDetailViewModel();
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [shaking, setShaking] = useState(false);
 
@@ -136,6 +145,23 @@ function RecipeDetailWorkspace() {
               </span>
             ))}
           </div>
+          {linkedRecipes.length > 0 ? (
+            <div className="flex flex-col gap-2" data-testid="linked-recipes">
+              <span className="text-sm font-medium text-text-35">Linked recipes:</span>
+              <div className="flex flex-wrap gap-2">
+                {linkedRecipes.map((linked) => (
+                  <button
+                    key={linked.id}
+                    type="button"
+                    className="chip chip-static hover:border-primary-40"
+                    onClick={() => openRecipeDetail(linked.id)}
+                  >
+                    {linked.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-col gap-4">

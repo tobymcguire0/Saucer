@@ -36,6 +36,78 @@ async function syncTaxonomyIfConnected(taxonomy: Taxonomy): Promise<void> {
   await syncState.saveTaxonomy(taxonomy);
 }
 
+export function reconcileRecipeLinks(
+  recipes: Recipe[],
+  changedRecipes: Recipe[],
+): { recipes: Recipe[]; touchedIds: Set<string> } {
+  const now = new Date().toISOString();
+  const byId = new Map<string, Recipe>();
+  for (const recipe of recipes) {
+    byId.set(recipe.id, recipe);
+  }
+  for (const changed of changedRecipes) {
+    byId.set(changed.id, changed);
+  }
+
+  const touchedIds = new Set<string>(changedRecipes.map((r) => r.id));
+
+  for (const changed of changedRecipes) {
+    const nextLinks = new Set(changed.linkedRecipeIds ?? []);
+    nextLinks.delete(changed.id);
+
+    for (const targetId of nextLinks) {
+      const target = byId.get(targetId);
+      if (!target) continue;
+      const targetLinks = new Set(target.linkedRecipeIds ?? []);
+      if (!targetLinks.has(changed.id)) {
+        targetLinks.add(changed.id);
+        byId.set(targetId, {
+          ...target,
+          linkedRecipeIds: [...targetLinks],
+          updatedAt: now,
+        });
+        touchedIds.add(targetId);
+      }
+    }
+
+    for (const [otherId, other] of byId) {
+      if (otherId === changed.id) continue;
+      if (nextLinks.has(otherId)) continue;
+      const otherLinks = other.linkedRecipeIds ?? [];
+      if (otherLinks.includes(changed.id)) {
+        byId.set(otherId, {
+          ...other,
+          linkedRecipeIds: otherLinks.filter((id) => id !== changed.id),
+          updatedAt: now,
+        });
+        touchedIds.add(otherId);
+      }
+    }
+  }
+
+  return { recipes: [...byId.values()], touchedIds };
+}
+
+export function scrubLinksToDeleted(recipes: Recipe[], deletedId: string): {
+  recipes: Recipe[];
+  touchedIds: Set<string>;
+} {
+  const now = new Date().toISOString();
+  const touchedIds = new Set<string>();
+  const nextRecipes = recipes.map((recipe) => {
+    if (recipe.id === deletedId) return recipe;
+    const links = recipe.linkedRecipeIds ?? [];
+    if (!links.includes(deletedId)) return recipe;
+    touchedIds.add(recipe.id);
+    return {
+      ...recipe,
+      linkedRecipeIds: links.filter((id) => id !== deletedId),
+      updatedAt: now,
+    };
+  });
+  return { recipes: nextRecipes, touchedIds };
+}
+
 function createInitialState() {
   return {
     recipes: [] as Recipe[],
@@ -159,7 +231,7 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     }
   },
   deleteRecipe: async (recipeId) => {
-    const { localRecipeIds } = get();
+    const { localRecipeIds, recipes, taxonomy } = get();
     const { useSyncStore } = await import("../sync/useSyncStore");
     const { connected, cursor } = useSyncStore.getState();
 
@@ -173,6 +245,12 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
       return false;
     }
 
+    const { recipes: scrubbed, touchedIds } = scrubLinksToDeleted(recipes, recipeId);
+    if (touchedIds.size > 0) {
+      const remaining = scrubbed.filter((r) => r.id !== recipeId);
+      await getRecipeStore().replaceAll(remaining, taxonomy);
+    }
+
     const snapshot = await getRecipeStore().deleteRecipe(recipeId);
     set({
       recipes: snapshot.recipes,
@@ -181,6 +259,18 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
       initialized: true,
     });
     useStatusStore.getState().updateStatus("Recipe deleted.", "success");
+
+    for (const touchedId of touchedIds) {
+      const updated = snapshot.recipes.find((r) => r.id === touchedId);
+      if (!updated) continue;
+      const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = updated;
+      void useSyncStore.getState().pushMutation({
+        type: "upsertRecipe",
+        clientMutationId: crypto.randomUUID(),
+        recipe: recipeInput,
+      });
+    }
+
     void useSyncStore.getState().pushMutation({
       type: "deleteRecipe",
       clientMutationId: crypto.randomUUID(),

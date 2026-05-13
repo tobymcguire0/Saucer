@@ -327,4 +327,80 @@ describe("createApp", () => {
 
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  it("returns a recipes array from /api/extract-recipe-text-multi when the model emits multiple recipes", async () => {
+    const { store } = createStoreStub();
+    anthropicCreateMock.mockResolvedValue({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            recipes: [
+              {
+                title: "Cake",
+                summary: "Sponge cake.",
+                ingredients: ["flour"],
+                instructions: ["Bake."],
+                servings: "8",
+                cuisine: "",
+                mealType: "Dessert",
+              },
+              {
+                title: "Icing",
+                summary: "Cream icing.",
+                ingredients: ["butter"],
+                instructions: ["Mix."],
+                servings: "",
+                cuisine: "",
+                mealType: "",
+              },
+            ],
+          }),
+        },
+      ],
+    });
+
+    const response = await request(
+      createApp({ store, verifyToken, fetchImpl, anthropicApiKey: "test-key" }),
+    )
+      .post("/api/extract-recipe-text-multi")
+      .set("Authorization", "Bearer good-token")
+      .send({ text: "Cake and icing." })
+      .expect(200);
+
+    expect(response.body.recipes).toHaveLength(2);
+    expect(response.body.recipes[0].title).toBe("Cake");
+    expect(response.body.recipes[1].title).toBe("Icing");
+  });
+
+  it("wraps a single-recipe model response into a recipes array", async () => {
+    const { store } = createStoreStub();
+    anthropicCreateMock.mockResolvedValue({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            title: "Toast",
+            summary: "Simple toast.",
+            ingredients: ["2 slices bread"],
+            instructions: ["Toast it."],
+            servings: "1",
+            cuisine: "",
+            mealType: "Breakfast",
+          }),
+        },
+      ],
+    });
+
+    const response = await request(
+      createApp({ store, verifyToken, fetchImpl, anthropicApiKey: "test-key" }),
+    )
+      .post("/api/extract-photo-multi")
+      .set("Authorization", "Bearer good-token")
+      .send({ imageDataUrl: VALID_IMAGE_DATA_URL })
+      .expect(200);
+
+    expect(response.body.recipes).toHaveLength(1);
+    expect(response.body.recipes[0].title).toBe("Toast");
+  });
 });

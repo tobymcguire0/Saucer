@@ -81,6 +81,7 @@ describe("recipe browse and detail UI", () => {
         findTagId(taxonomy, "Ingredients", "Pasta"),
         findTagId(taxonomy, "Ingredients", "Egg"),
       ],
+      linkedRecipeIds: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -125,6 +126,7 @@ describe("recipe browse and detail UI", () => {
       mealType: "Dinner",
       rating: 2,
       tagIds: [findTagId(taxonomy, "Meal-Time", "Dinner")],
+      linkedRecipeIds: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -165,6 +167,7 @@ describe("recipe browse and detail UI", () => {
       mealType: "Dinner",
       rating: 0,
       tagIds: [findTagId(taxonomy, "Meal-Time", "Dinner")],
+      linkedRecipeIds: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -203,6 +206,7 @@ describe("recipe browse and detail UI", () => {
       mealType: "Dinner",
       rating: 0,
       tagIds: [findTagId(taxonomy, "Meal-Time", "Dinner")],
+      linkedRecipeIds: [],
       createdAt: now,
       updatedAt: now,
     };

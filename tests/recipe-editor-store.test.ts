@@ -2,9 +2,17 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { importRecipeDraftFromFileMock, importRecipeDraftFromWebsiteMock, invokeMock } = vi.hoisted(() => ({
+const {
+  importRecipeDraftFromFileMock,
+  importRecipeDraftsFromFileMock,
+  importRecipeDraftsFromWebsiteMock,
+  importRecipeDraftsFromTextMock,
+  invokeMock,
+} = vi.hoisted(() => ({
   importRecipeDraftFromFileMock: vi.fn(),
-  importRecipeDraftFromWebsiteMock: vi.fn(),
+  importRecipeDraftsFromFileMock: vi.fn(),
+  importRecipeDraftsFromWebsiteMock: vi.fn(),
+  importRecipeDraftsFromTextMock: vi.fn(),
   invokeMock: vi.fn(),
 }));
 
@@ -14,7 +22,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("../src/features/editor/recipeImportService", () => ({
   importRecipeDraftFromFile: importRecipeDraftFromFileMock,
-  importRecipeDraftFromWebsite: importRecipeDraftFromWebsiteMock,
+  importRecipeDraftsFromFile: importRecipeDraftsFromFileMock,
+  importRecipeDraftsFromWebsite: importRecipeDraftsFromWebsiteMock,
+  importRecipeDraftsFromText: importRecipeDraftsFromTextMock,
 }));
 
 import { ApiClient } from "../src/lib/apiClient";
@@ -37,6 +47,7 @@ const importedPhotoDraft: RecipeDraft = {
   cuisine: "",
   mealType: "Breakfast",
   selectedTagIds: [],
+  selectedLinkedRecipeIds: [],
 };
 
 describe("useRecipeEditorStore", () => {
@@ -44,7 +55,9 @@ describe("useRecipeEditorStore", () => {
     vi.useFakeTimers();
     window.localStorage.clear();
     importRecipeDraftFromFileMock.mockReset();
-    importRecipeDraftFromWebsiteMock.mockReset();
+    importRecipeDraftsFromFileMock.mockReset();
+    importRecipeDraftsFromWebsiteMock.mockReset();
+    importRecipeDraftsFromTextMock.mockReset();
     invokeMock.mockReset();
     resetRecipeEditorStore();
     resetSaucerStore();
@@ -59,7 +72,7 @@ describe("useRecipeEditorStore", () => {
   });
 
   it("skips remote photo extraction when sync is disconnected", async () => {
-    importRecipeDraftFromFileMock.mockResolvedValue(importedPhotoDraft);
+    importRecipeDraftsFromFileMock.mockResolvedValue([importedPhotoDraft]);
 
     useSyncStore.getState().setClient(new ApiClient(() => "token"));
     useSyncStore.getState().setConnected(false);
@@ -68,8 +81,21 @@ describe("useRecipeEditorStore", () => {
     const file = new File(["fake-image"], "toast.png", { type: "image/png" });
     await useRecipeEditorStore.getState().importFromFile(file);
 
-    expect(importRecipeDraftFromFileMock).toHaveBeenCalledTimes(1);
-    expect(importRecipeDraftFromFileMock).toHaveBeenCalledWith(file, "file", undefined, undefined);
+    expect(importRecipeDraftsFromFileMock).toHaveBeenCalledTimes(1);
+    expect(importRecipeDraftsFromFileMock).toHaveBeenCalledWith(file, "file", undefined, undefined);
     expect(useStatusStore.getState().statusMessage).toBe("toast.png imported into the review form.");
+  });
+
+  it("imports multiple recipes from a single source into parsedDrafts", async () => {
+    const secondDraft: RecipeDraft = { ...importedPhotoDraft, title: "Icing" };
+    importRecipeDraftsFromTextMock.mockResolvedValue([importedPhotoDraft, secondDraft]);
+
+    useRecipeEditorStore.getState().openCreateEditor("text");
+    await useRecipeEditorStore.getState().importFromText("two recipes");
+
+    const state = useRecipeEditorStore.getState();
+    expect(state.parsedDrafts).toHaveLength(2);
+    expect(state.parsedDraftIndex).toBe(0);
+    expect(state.draft.title).toBe("Toast");
   });
 });

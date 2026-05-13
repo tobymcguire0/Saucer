@@ -42,6 +42,8 @@ export function serializeRecipe(recipe: Recipe) {
     `updatedAt: ${escapeFrontmatter(recipe.updatedAt)}`,
     "tags:",
     ...recipe.tagIds.map((tagId) => `  - ${escapeFrontmatter(tagId)}`),
+    "linkedRecipes:",
+    ...(recipe.linkedRecipeIds ?? []).map((id) => `  - ${escapeFrontmatter(id)}`),
     "---",
   ].join("\n");
 
@@ -148,6 +150,7 @@ export function parseRecipeMarkdown(markdown: string, attachment?: string): Reci
     mealType: parseFrontmatterString(frontmatter, "mealType") || undefined,
     rating: Number(frontmatter.get("rating") ?? 0),
     tagIds: parseFrontmatterStringList(frontmatter, "tags"),
+    linkedRecipeIds: parseFrontmatterStringList(frontmatter, "linkedRecipes"),
     createdAt: parseFrontmatterString(frontmatter, "createdAt") || new Date().toISOString(),
     updatedAt: parseFrontmatterString(frontmatter, "updatedAt") || new Date().toISOString(),
   };

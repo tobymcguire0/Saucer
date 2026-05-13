@@ -28,6 +28,7 @@ export interface ApiRecipeInput {
   mealType?: string;
   rating?: number;
   tagIds?: string[];
+  linkedRecipeIds?: string[];
 }
 
 export interface ApiRecipe extends ApiRecipeInput {
@@ -89,6 +90,10 @@ export interface ApiPhotoExtraction {
   servings: string;
   cuisine: string;
   mealType: string;
+}
+
+export interface ApiPhotoExtractionMulti {
+  recipes: ApiPhotoExtraction[];
 }
 
 async function readErrorMessage(res: Response): Promise<string> {
@@ -188,6 +193,19 @@ export class ApiClient {
 
   async extractRecipeText(text: string, pageTitle?: string): Promise<ApiPhotoExtraction> {
     return this.request<ApiPhotoExtraction>("POST", "/api/extract-recipe-text", { text, title: pageTitle });
+  }
+
+  async extractPhotoMulti(imageDataUrl: string): Promise<ApiPhotoExtractionMulti> {
+    return this.request<ApiPhotoExtractionMulti>("POST", "/api/extract-photo-multi", {
+      imageDataUrl,
+    });
+  }
+
+  async extractRecipeTextMulti(text: string, pageTitle?: string): Promise<ApiPhotoExtractionMulti> {
+    return this.request<ApiPhotoExtractionMulti>("POST", "/api/extract-recipe-text-multi", {
+      text,
+      title: pageTitle,
+    });
   }
 
   async fetchWebsitePage(url: string): Promise<{ url: string; html: string }> {

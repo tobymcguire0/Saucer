@@ -212,29 +212,22 @@ function RecipeDetailWorkspace() {
                   </span>
                 </header>
                 <div className="flex flex-col gap-3 p-4">
-                  <section
-                    className="rounded-[calc(var(--radius-card)-0.5rem)] border border-dashed border-panel-15 bg-panel-5 p-3"
-                    aria-label={`Step ${stepNumber} ingredients`}
-                  >
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-35">
-                      Step {stepNumber} Ingredients
-                    </p>
-                    {stepIngredients.length === 0 ? (
-                      <p className="mt-2 text-sm italic text-text-35">
-                        No specific ingredients for this step.
+                  {stepIngredients.length > 0 ? (
+                    <section
+                      className="rounded-[calc(var(--radius-card)-0.5rem)] border border-dashed border-panel-15 bg-panel-5 p-3"
+                      aria-label={`Step ${stepNumber} ingredients`}
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-35">
+                        Ingredients
                       </p>
-                    ) : (
                       <ul className="mt-2 space-y-1 pl-5 text-sm leading-6 text-text-50">
                         {stepIngredients.map((ingredient) => (
                           <li key={ingredient.id}>{ingredient.raw}</li>
                         ))}
                       </ul>
-                    )}
-                  </section>
+                    </section>
+                  ) : null}
                   <section aria-label={`Step ${stepNumber} instruction`}>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-35">
-                      Step {stepNumber}
-                    </p>
                     <p className="mt-2 text-base leading-7 text-text-50">{step.text}</p>
                   </section>
                 </div>

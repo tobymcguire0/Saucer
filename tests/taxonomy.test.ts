@@ -54,7 +54,9 @@ describe("taxonomy matching", () => {
         summary: "Simple lunch recipe.",
         sourceType: "manual",
         ingredients: [{ id: "ingredient-1", name: "Bread", raw: "2 slices bread" }],
-        instructions: ["Toast the bread."],
+        instructions: [
+          { id: "recipe-lunch-step-1", text: "Toast the bread.", ingredientUsages: [] },
+        ],
         servings: "1",
         cuisine: "American",
         mealType: "Lunch",

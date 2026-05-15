@@ -40,7 +40,7 @@ Fresh and crunchy.
 
     expect(recipe.title).toBe("Test Salad");
     expect(recipe.ingredients).toHaveLength(2);
-    expect(recipe.instructions[0]).toBe("Toss together.");
+    expect(recipe.instructions[0].text).toBe("Toss together.");
   });
 
   it("falls back to manual source type for invalid recipe frontmatter values", () => {
@@ -92,7 +92,9 @@ tags: []
         sourceRef: undefined,
         heroImage: undefined,
         ingredients: [{ id: "ingredient-rice", name: "Rice", raw: "1 cup rice" }],
-        instructions: ["Cook rice."],
+        instructions: [
+          { id: "recipe-dinner-step-1", text: "Cook rice.", ingredientUsages: [] },
+        ],
         servings: "2",
         cuisine: "Japanese",
         mealType: "Dinner",

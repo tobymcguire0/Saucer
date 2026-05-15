@@ -263,11 +263,11 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     for (const touchedId of touchedIds) {
       const updated = snapshot.recipes.find((r) => r.id === touchedId);
       if (!updated) continue;
-      const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = updated;
+      const { recipeToApiInput } = await import("../sync/useSyncStore");
       void useSyncStore.getState().pushMutation({
         type: "upsertRecipe",
         clientMutationId: crypto.randomUUID(),
-        recipe: recipeInput,
+        recipe: recipeToApiInput(updated),
       });
     }
 
@@ -287,12 +287,11 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     await replaceAll(nextRecipes, taxonomy, "Recipe rating updated.");
     const updatedRecipe = nextRecipes.find((r) => r.id === recipeId);
     if (updatedRecipe) {
-      const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = updatedRecipe;
-      const { useSyncStore } = await import("../sync/useSyncStore");
+      const { useSyncStore, recipeToApiInput } = await import("../sync/useSyncStore");
       void useSyncStore.getState().pushMutation({
         type: "upsertRecipe",
         clientMutationId: crypto.randomUUID(),
-        recipe: recipeInput,
+        recipe: recipeToApiInput(updatedRecipe),
       });
     }
   },

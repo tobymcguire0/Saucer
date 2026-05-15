@@ -2,12 +2,14 @@ import { createDefaultTaxonomy, slugify } from "./defaultTaxonomy";
 import type {
   Category,
   Ingredient,
+  IngredientUsage,
   Recipe,
   RecipeDraft,
   Tag,
   TagSuggestion,
   Taxonomy,
 } from "./models";
+import { buildRecipeSteps } from "./recipeSteps";
 
 function normalizeWhitespace(value: string) {
   return value.trim().replace(/\s+/g, " ");
@@ -372,7 +374,7 @@ function collectInstructionKeywords(recipe: Pick<RecipeDraft, "instructionsText"
   const instructionsText =
     "instructionsText" in recipe
       ? recipe.instructionsText
-      : recipe.instructions.join(" ");
+      : recipe.instructions.map((step) => step.text).join(" ");
 
   const normalized = normalizeTerm(instructionsText);
   const values: Array<{ categoryName: string; term: string }> = [];
@@ -564,7 +566,7 @@ export function getVisibleDraftTagIds(
   ];
 }
 
-export function convertDraftToRecipe(draft: RecipeDraft) {
+export function convertDraftToRecipe(draft: RecipeDraft): Recipe {
   const now = new Date().toISOString();
   const recipeId = draft.id ?? `recipe-${crypto.randomUUID()}`;
   const ingredients = draft.ingredientsText
@@ -577,11 +579,27 @@ export function convertDraftToRecipe(draft: RecipeDraft) {
       raw,
     }));
 
-  const instructions = draft.instructionsText
+  const instructionTexts = draft.instructionsText
     .split(/\r?\n/)
     .map((step) => step.trim())
     .filter(Boolean)
     .map((step) => step.replace(/^\d+[.)]\s*/, ""));
+
+  const explicitMap: Record<number, IngredientUsage[]> = {};
+  if (draft.stepIngredientMap) {
+    for (const [key, value] of Object.entries(draft.stepIngredientMap)) {
+      const stepIndex = Number(key);
+      const usages = value
+        .map((ingredientIndex) => ingredients[ingredientIndex])
+        .filter((ingredient): ingredient is (typeof ingredients)[number] => Boolean(ingredient))
+        .map((ingredient) => ({ ingredientId: ingredient.id }));
+      if (usages.length > 0) {
+        explicitMap[stepIndex] = usages;
+      }
+    }
+  }
+
+  const instructions = buildRecipeSteps(recipeId, instructionTexts, ingredients, explicitMap);
 
   return {
     id: recipeId,

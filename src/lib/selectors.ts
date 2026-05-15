@@ -38,7 +38,7 @@ export function filterRecipes(
       const searchHaystack = normalizeTerm(
         [recipe.title, recipe.summary, recipe.cuisine, recipe.mealType]
           .concat(recipe.ingredients.map((ingredient) => ingredient.name))
-          .concat(recipe.instructions)
+          .concat(recipe.instructions.map((step) => step.text))
           .join(" "),
       );
 

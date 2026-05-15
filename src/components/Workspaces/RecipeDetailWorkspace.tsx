@@ -214,10 +214,10 @@ function RecipeDetailWorkspace() {
                 <div className="flex flex-col gap-3 p-4">
                   <section
                     className="rounded-[calc(var(--radius-card)-0.5rem)] border border-dashed border-panel-15 bg-panel-5 p-3"
-                    aria-label={`Ingredients for step ${stepNumber}`}
+                    aria-label={`Step ${stepNumber} ingredients`}
                   >
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-35">
-                      Ingredients for Step {stepNumber}
+                      Step {stepNumber} Ingredients
                     </p>
                     {stepIngredients.length === 0 ? (
                       <p className="mt-2 text-sm italic text-text-35">

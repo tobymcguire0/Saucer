@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import type { Recipe, RecipeDraft, SourceType, Taxonomy } from "../../lib/models";
 import { canUseTauri } from "../../lib/persistence";
+import { stepIngredientMapFromSteps } from "../../lib/recipeSteps";
 import {
   buildTagSuggestions,
   convertDraftToRecipe,
@@ -65,13 +66,14 @@ function toDraft(recipe: Recipe): RecipeDraft {
     heroImage: recipe.heroImage,
     ingredientsText: recipe.ingredients.map((ingredient) => ingredient.raw).join("\n"),
     instructionsText: recipe.instructions
-      .map((instruction, index) => `${index + 1}. ${instruction}`)
+      .map((step, index) => `${index + 1}. ${step.text}`)
       .join("\n"),
     servings: recipe.servings ?? "",
     cuisine: recipe.cuisine ?? "",
     mealType: recipe.mealType ?? "",
     selectedTagIds: recipe.tagIds,
     selectedLinkedRecipeIds: recipe.linkedRecipeIds ?? [],
+    stepIngredientMap: stepIngredientMapFromSteps(recipe.instructions, recipe.ingredients),
   };
 }
 
@@ -454,14 +456,14 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
         `${linked.length} recipes created and linked.`,
       );
 
+      const { recipeToApiInput } = await import("../sync/useSyncStore");
       for (const id of touchedIds) {
         const updated = reconciledRecipes.find((r) => r.id === id);
         if (!updated) continue;
-        const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = updated;
         void useSyncStore.getState().pushMutation({
           type: "upsertRecipe",
           clientMutationId: crypto.randomUUID(),
-          recipe: recipeInput,
+          recipe: recipeToApiInput(updated),
         });
       }
 
@@ -515,14 +517,14 @@ export const useRecipeEditorStore = create<RecipeEditorStoreState>((set, get) =>
       editorMode === "edit" ? "Recipe updated." : "Recipe created and indexed.",
     );
 
+    const { recipeToApiInput } = await import("../sync/useSyncStore");
     for (const id of touchedIds) {
       const updated = reconciledRecipes.find((r) => r.id === id);
       if (!updated) continue;
-      const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = updated;
       void useSyncStore.getState().pushMutation({
         type: "upsertRecipe",
         clientMutationId: crypto.randomUUID(),
-        recipe: recipeInput,
+        recipe: recipeToApiInput(updated),
       });
     }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "../../lib/cn";
 import { useRecipeDetailViewModel } from "../../features/browse/useRecipeDetailViewModel";
 import StarRating from "../StarRating";
@@ -30,6 +30,11 @@ function RecipeDetailWorkspace() {
   const sortedTagIds = recipe
     ? sortTagIdsForPreview(recipe.tagIds, tagLookup, categoryLookup)
     : [];
+
+  const ingredientLookup = useMemo(
+    () => new Map((recipe?.ingredients ?? []).map((ingredient) => [ingredient.id, ingredient])),
+    [recipe],
+  );
 
   useEffect(() => {
     setDeleteConfirming(false);
@@ -166,7 +171,7 @@ function RecipeDetailWorkspace() {
 
         <div className="flex flex-col gap-4">
           <section className="rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
-            <h3 className="text-xl font-semibold text-text-60">Ingredients</h3>
+            <h3 className="text-xl font-semibold text-text-60">All ingredients</h3>
             <ul className="mt-3 space-y-2 pl-5 text-sm leading-6 text-text-45">
               {recipe.ingredients.map((ingredient) => (
                 <li key={ingredient.id}>{ingredient.raw}</li>
@@ -176,13 +181,67 @@ function RecipeDetailWorkspace() {
         </div>
       </div>
 
-      <section className="rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
-        <h3 className="text-xl font-semibold text-text-60">Instructions</h3>
-        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-text-45">
-          {recipe.instructions.map((instruction) => (
-            <li key={instruction}>{instruction}</li>
-          ))}
-        </ol>
+      <section
+        className="flex flex-col gap-4"
+        aria-label="Recipe steps"
+        data-testid="recipe-steps"
+      >
+        <h3 className="text-xl font-semibold text-text-60">Steps</h3>
+        {recipe.instructions.length === 0 ? (
+          <p className="text-sm text-text-35">No instructions for this recipe yet.</p>
+        ) : (
+          recipe.instructions.map((step, index) => {
+            const stepNumber = index + 1;
+            const stepIngredients = step.ingredientUsages
+              .map((usage) => ingredientLookup.get(usage.ingredientId))
+              .filter((ing): ing is NonNullable<typeof ing> => Boolean(ing));
+            return (
+              <article
+                key={step.id}
+                className="overflow-hidden rounded-[var(--radius-card)] border-2 border-panel-15 bg-panel-0 shadow-[var(--shadow-panel)]"
+                data-testid={`recipe-step-${stepNumber}`}
+              >
+                <header className="flex items-center justify-between gap-3 border-b border-panel-15 bg-panel-5 px-4 py-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-60">
+                    Step {stepNumber}
+                  </span>
+                  <span className="text-xs font-medium text-text-35">
+                    {stepIngredients.length > 0
+                      ? `${stepIngredients.length} ingredient${stepIngredients.length === 1 ? "" : "s"}`
+                      : "No specific ingredients"}
+                  </span>
+                </header>
+                <div className="flex flex-col gap-3 p-4">
+                  <section
+                    className="rounded-[calc(var(--radius-card)-0.5rem)] border border-dashed border-panel-15 bg-panel-5 p-3"
+                    aria-label={`Ingredients for step ${stepNumber}`}
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-35">
+                      Ingredients for Step {stepNumber}
+                    </p>
+                    {stepIngredients.length === 0 ? (
+                      <p className="mt-2 text-sm italic text-text-35">
+                        No specific ingredients for this step.
+                      </p>
+                    ) : (
+                      <ul className="mt-2 space-y-1 pl-5 text-sm leading-6 text-text-50">
+                        {stepIngredients.map((ingredient) => (
+                          <li key={ingredient.id}>{ingredient.raw}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                  <section aria-label={`Step ${stepNumber} instruction`}>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-35">
+                      Step {stepNumber}
+                    </p>
+                    <p className="mt-2 text-base leading-7 text-text-50">{step.text}</p>
+                  </section>
+                </div>
+              </article>
+            );
+          })
+        )}
       </section>
     </section>
   );

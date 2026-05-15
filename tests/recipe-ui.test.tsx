@@ -64,7 +64,11 @@ describe("recipe browse and detail UI", () => {
         { id: "ingredient-1", name: "Spaghetti", raw: "300g spaghetti" },
         { id: "ingredient-2", name: "Eggs", raw: "2 eggs" },
       ],
-      instructions: ["Boil pasta.", "Assemble the bake.", "Cook until bubbling."],
+      instructions: [
+        { id: "step-1", text: "Boil pasta.", ingredientUsages: [] },
+        { id: "step-2", text: "Assemble the bake.", ingredientUsages: [] },
+        { id: "step-3", text: "Cook until bubbling.", ingredientUsages: [] },
+      ],
       servings: "4 people",
       cuisine: "Italian",
       mealType: "Dinner",
@@ -111,6 +115,65 @@ describe("recipe browse and detail UI", () => {
     expect(screen.getByRole("button", { name: "Open Layered Pasta Bake" })).toBeTruthy();
   });
 
+  it("renders per-step ingredient sections labeled with the matching step", async () => {
+    const taxonomy = createDefaultTaxonomy();
+    const now = new Date().toISOString();
+    const recipe: Recipe = {
+      id: "recipe-step-pairing",
+      title: "Step Pairing",
+      summary: "Recipe that exercises per-step ingredients.",
+      sourceType: "manual",
+      ingredients: [
+        { id: "ing-butter", name: "Butter", raw: "1/2 lb butter" },
+        { id: "ing-pasta", name: "Pasta", raw: "300g pasta" },
+      ],
+      instructions: [
+        {
+          id: "step-1",
+          text: "Boil the pasta.",
+          ingredientUsages: [{ ingredientId: "ing-pasta" }],
+        },
+        {
+          id: "step-2",
+          text: "Mix in all butter.",
+          ingredientUsages: [{ ingredientId: "ing-butter" }],
+        },
+      ],
+      servings: "2",
+      cuisine: "Italian",
+      mealType: "Dinner",
+      rating: 0,
+      tagIds: [findTagId(taxonomy, "Meal-Time", "Dinner")],
+      linkedRecipeIds: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await seedRecipe(recipe, taxonomy);
+
+    const user = userEvent.setup();
+    renderApp();
+
+    const card = await screen.findByTestId("recipe-card-recipe-step-pairing");
+    await user.click(card);
+
+    const detailView = await screen.findByTestId("recipe-detail-view");
+
+    const stepCards = within(detailView).getAllByTestId(/recipe-step-/);
+    expect(stepCards.length).toBe(2);
+
+    const step1 = within(detailView).getByTestId("recipe-step-1");
+    expect(within(step1).getByText(/Ingredients for Step 1/)).toBeTruthy();
+    expect(within(step1).getByText(/300g pasta/)).toBeTruthy();
+    expect(within(step1).getByText("Boil the pasta.")).toBeTruthy();
+    expect(within(step1).queryByText(/1\/2 lb butter/)).toBeNull();
+
+    const step2 = within(detailView).getByTestId("recipe-step-2");
+    expect(within(step2).getByText(/Ingredients for Step 2/)).toBeTruthy();
+    expect(within(step2).getByText(/1\/2 lb butter/)).toBeTruthy();
+    expect(within(step2).getByText("Mix in all butter.")).toBeTruthy();
+  });
+
   it("supports hover preview and click for star ratings", async () => {
     const taxonomy = createDefaultTaxonomy();
     const now = new Date().toISOString();
@@ -120,7 +183,7 @@ describe("recipe browse and detail UI", () => {
       summary: "A recipe used to verify star ratings.",
       sourceType: "manual",
       ingredients: [{ id: "ingredient-1", name: "Rice", raw: "2 cups rice" }],
-      instructions: ["Cook rice."],
+      instructions: [{ id: "star-step-1", text: "Cook rice.", ingredientUsages: [] }],
       servings: "2 people",
       cuisine: "Japanese",
       mealType: "Dinner",
@@ -161,7 +224,7 @@ describe("recipe browse and detail UI", () => {
       summary: "A recipe used to verify delete confirmation.",
       sourceType: "manual",
       ingredients: [{ id: "ingredient-1", name: "Beans", raw: "1 can beans" }],
-      instructions: ["Heat the beans."],
+      instructions: [{ id: "del-step-1", text: "Heat the beans.", ingredientUsages: [] }],
       servings: "2 people",
       cuisine: "Tex-Mex",
       mealType: "Dinner",
@@ -200,7 +263,7 @@ describe("recipe browse and detail UI", () => {
       summary: "A recipe used to verify random recipe navigation.",
       sourceType: "manual",
       ingredients: [{ id: "ingredient-1", name: "Rice", raw: "1 cup rice" }],
-      instructions: ["Cook the rice."],
+      instructions: [{ id: "rand-step-1", text: "Cook the rice.", ingredientUsages: [] }],
       servings: "2 people",
       cuisine: "Japanese",
       mealType: "Dinner",

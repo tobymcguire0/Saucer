@@ -1,5 +1,11 @@
 import { createDefaultTaxonomy, slugify } from "../defaultTaxonomy";
 import type { AppSnapshot, Recipe, Taxonomy } from "../models";
+import {
+  buildStepId,
+  detectIngredientUsages,
+  parseStepLine,
+  serializeStepLine,
+} from "../recipeSteps";
 import { isSourceType } from "../typeGuards";
 
 export interface VaultSnapshot {
@@ -49,7 +55,7 @@ export function serializeRecipe(recipe: Recipe) {
 
   const ingredients = recipe.ingredients.map((ingredient) => `- ${ingredient.raw}`).join("\n");
   const instructions = recipe.instructions
-    .map((step, index) => `${index + 1}. ${step}`)
+    .map((step, index) => serializeStepLine(step, index))
     .join("\n");
 
   return `${frontmatter}
@@ -124,8 +130,40 @@ export function parseRecipeMarkdown(markdown: string, attachment?: string): Reci
   const ingredientsSection = sections.find((section) => section.startsWith("Ingredients"));
   const instructionsSection = sections.find((section) => section.startsWith("Instructions"));
 
+  const recipeId = parseFrontmatterString(frontmatter, "id") || crypto.randomUUID();
+  const ingredients = (ingredientsSection?.split("\n").slice(1) ?? [])
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => ({
+      id: `${recipeId}-${slugify(line)}`,
+      name: line.replace(/^-\s*/, ""),
+      raw: line.replace(/^-\s*/, ""),
+    }));
+
+  const ingredientIdSet = new Set(ingredients.map((ing) => ing.id));
+  const instructions = (instructionsSection?.split("\n").slice(1) ?? [])
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      const parsed = parseStepLine(line);
+      // Filter out any annotated ingredient ids that no longer exist
+      // (e.g. ingredient list was edited externally) so they don't render as ghosts.
+      const validAnnotated = parsed.ingredientUsages.filter((usage) =>
+        ingredientIdSet.has(usage.ingredientId),
+      );
+      const usages =
+        validAnnotated.length > 0
+          ? validAnnotated
+          : detectIngredientUsages(parsed.text, ingredients);
+      return {
+        id: buildStepId(recipeId, index, parsed.text),
+        text: parsed.text,
+        ingredientUsages: usages,
+      };
+    });
+
   return {
-    id: parseFrontmatterString(frontmatter, "id") || crypto.randomUUID(),
+    id: recipeId,
     title: parseFrontmatterString(frontmatter, "title") || "Untitled recipe",
     summary:
       summarySection?.replace(/^Summary\s*/, "").trim() ??
@@ -133,18 +171,8 @@ export function parseRecipeMarkdown(markdown: string, attachment?: string): Reci
     sourceType: parseSourceType(frontmatter.get("sourceType")),
     sourceRef: parseFrontmatterString(frontmatter, "sourceRef") || undefined,
     heroImage: attachment,
-    ingredients: (ingredientsSection?.split("\n").slice(1) ?? [])
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => ({
-        id: `${parseFrontmatterString(frontmatter, "id") || "recipe"}-${slugify(line)}`,
-        name: line.replace(/^-\s*/, ""),
-        raw: line.replace(/^-\s*/, ""),
-      })),
-    instructions: (instructionsSection?.split("\n").slice(1) ?? [])
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => line.replace(/^\d+[.)]\s*/, "")),
+    ingredients,
+    instructions,
     servings: parseFrontmatterString(frontmatter, "servings") || undefined,
     cuisine: parseFrontmatterString(frontmatter, "cuisine") || undefined,
     mealType: parseFrontmatterString(frontmatter, "mealType") || undefined,

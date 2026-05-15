@@ -1,10 +1,37 @@
 import { create } from "zustand";
 
-import type { ApiClient, ApiMutation, ApiRecipe, ApiTaxonomy } from "../../lib/apiClient";
+import type {
+  ApiClient,
+  ApiMutation,
+  ApiRecipe,
+  ApiRecipeInput,
+  ApiTaxonomy,
+} from "../../lib/apiClient";
 import type { Recipe, Taxonomy } from "../../lib/models";
+import { buildRecipeSteps } from "../../lib/recipeSteps";
 import { useSaucerStore } from "../saucer/useSaucerStore";
 
+export function recipeToApiInput(recipe: Recipe): ApiRecipeInput {
+  return {
+    id: recipe.id,
+    title: recipe.title,
+    summary: recipe.summary,
+    sourceType: recipe.sourceType,
+    sourceRef: recipe.sourceRef,
+    heroImage: recipe.heroImage,
+    ingredients: recipe.ingredients,
+    instructions: recipe.instructions.map((step) => step.text),
+    servings: recipe.servings,
+    cuisine: recipe.cuisine,
+    mealType: recipe.mealType,
+    rating: recipe.rating,
+    tagIds: recipe.tagIds,
+    linkedRecipeIds: recipe.linkedRecipeIds,
+  };
+}
+
 function toClientRecipe(r: ApiRecipe): Recipe {
+  const instructionsText = Array.isArray(r.instructions) ? r.instructions : [];
   return {
     id: r.id,
     title: r.title,
@@ -13,7 +40,7 @@ function toClientRecipe(r: ApiRecipe): Recipe {
     sourceRef: r.sourceRef,
     heroImage: r.heroImage,
     ingredients: r.ingredients,
-    instructions: r.instructions ?? [],
+    instructions: buildRecipeSteps(r.id, instructionsText, r.ingredients),
     servings: r.servings,
     cuisine: r.cuisine,
     mealType: r.mealType,
@@ -115,11 +142,10 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       useSaucerStore.getState().confirmRecipes(serverIdSet);
 
       for (const recipe of newLocals) {
-        const { createdAt: _ca, updatedAt: _ua, revision: _rev, ...recipeInput } = recipe;
         void get().pushMutation({
           type: "upsertRecipe",
           clientMutationId: crypto.randomUUID(),
-          recipe: recipeInput,
+          recipe: recipeToApiInput(recipe),
         });
       }
 

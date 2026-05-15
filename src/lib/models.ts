@@ -29,6 +29,17 @@ export interface Ingredient {
   raw: string;
 }
 
+export interface IngredientUsage {
+  ingredientId: string;
+  qty?: string;
+}
+
+export interface RecipeStep {
+  id: string;
+  text: string;
+  ingredientUsages: IngredientUsage[];
+}
+
 export interface Recipe {
   id: string;
   title: string;
@@ -37,7 +48,7 @@ export interface Recipe {
   sourceRef?: string;
   heroImage?: string;
   ingredients: Ingredient[];
-  instructions: string[];
+  instructions: RecipeStep[];
   servings?: string;
   cuisine?: string;
   mealType?: string;
@@ -73,6 +84,7 @@ export interface RecipeDraft {
   mealType: string;
   selectedTagIds: string[];
   selectedLinkedRecipeIds: string[];
+  stepIngredientMap?: Record<number, number[]>;
 }
 
 export interface RecipeQuery {

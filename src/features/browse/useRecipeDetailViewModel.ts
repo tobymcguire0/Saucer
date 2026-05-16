@@ -5,7 +5,7 @@ import { useTaxonomyViewModel } from "../taxonomy/useTaxonomyViewModel";
 import { useRecipeCatalogViewModel } from "./useRecipeCatalogViewModel";
 
 export function useRecipeDetailViewModel() {
-  const { closeRecipeDetail, openRecipeDetail } = useAppShellViewModel();
+  const { returnToMainView, openRecipeDetail } = useAppShellViewModel();
   const { selectedRecipe, deleteRecipe, updateRecipeRating } = useRecipeCatalogViewModel();
   const { openEditEditor } = useRecipeEditorActions();
   const { tagLookup, categoryLookup } = useTaxonomyViewModel();
@@ -17,7 +17,7 @@ export function useRecipeDetailViewModel() {
 
   return {
     recipe: selectedRecipe,
-    closeRecipeDetail,
+    returnToMainView,
     deleteRecipe,
     updateRecipeRating,
     openEditEditor,

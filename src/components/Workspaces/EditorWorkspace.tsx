@@ -291,7 +291,15 @@ function EditorWorkspace() {
           </div>
         </div>
       ) : null}
-
+      {isImporting ? (
+            <div className="importing-indicator" role="status" aria-live="polite" aria-label="Importing recipe">
+              <div className="importing-indicator-spinner" aria-hidden="true" />
+              <div className="importing-indicator-title text-base font-semi">Importing recipe...</div>
+              <div className="importing-indicator-subtitle text-sm text-muted">
+                Extracting details and preparing your draft
+              </div>
+            </div>
+          ) : null}
       <div className="editor-layout">
         <div className="recipe-form">
           <section className="form-section">

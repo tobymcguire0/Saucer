@@ -8,12 +8,14 @@ import BackupSection from "../settings/BackupSection";
 import AppearanceSection from "../settings/AppearanceSection";
 import AboutSection from "../settings/AboutSection";
 import { cn } from "../../lib/cn";
+import { useAppShellViewModel } from "../../features/app/useAppShellViewModel";
 
 type SectionKey = "profile" | "taxonomy" | "backup" | "appearance" | "about";
 
 function SettingsWorkspace() {
   const [section, setSection] = useState<SectionKey>("profile");
   const auth = useAuth();
+  const { returnToMainView } = useAppShellViewModel();
   const username =
     (auth.user?.profile.preferred_username as string | undefined) ??
     (auth.user?.profile.email as string | undefined) ??
@@ -23,6 +25,16 @@ function SettingsWorkspace() {
     <div className="settings-layout">
       <nav className="settings-nav-panel">
         <div className="settings-nav-section">
+          <button
+            type="button"
+            className="icon-btn settings-close-btn"
+            aria-label="Close settings"
+            onClick={returnToMainView}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
           <div className="settings-nav-section-label">Account</div>
           <button type="button" className={cn("settings-nav-item", section === "profile" && "active")} onClick={() => setSection("profile")}>
             Profile

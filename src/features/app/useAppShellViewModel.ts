@@ -39,7 +39,7 @@ export function useAppShellViewModel() {
     [browseState, recipes, updateStatus],
   );
 
-  const closeRecipeDetail = useCallback(() => {
+  const returnToMainView = useCallback(() => {
     browseState.setActiveWorkspace("browse");
     updateStatus("Returned to browse.", "info");
   }, [browseState, updateStatus]);
@@ -49,6 +49,6 @@ export function useAppShellViewModel() {
     loading,
     setActiveWorkspace: browseState.setActiveWorkspace,
     openRecipeDetail,
-    closeRecipeDetail,
+    returnToMainView,
   };
 }

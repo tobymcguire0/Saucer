@@ -80,7 +80,7 @@ export function stepsToText(steps: string[]): string {
     .join("\n");
 }
 
-export function splitAmountFromRaw(raw: string): { amount: string; name: string } {
+export function splitAmountFromRaw(raw: string): { amount: string; name: string} {
   const row = parseIngredientRow(raw);
   const amount = [row.qty, row.unit].filter(Boolean).join(" ").trim();
   return { amount, name: row.name || raw };

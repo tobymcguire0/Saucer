@@ -127,8 +127,18 @@ export function createApp({ store, verifyToken, fetchImpl, anthropicApiKey }: Ap
   const app = express();
   // Increased limit to accommodate base64-encoded recipe photos (~300–500KB after resize).
   app.use(express.json({ limit: "10mb" }));
+  const allowedOrigins = (process.env.ALLOWED_ORIGIN ?? "http://localhost:1420")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
   app.use(cors({
-    origin: process.env.ALLOWED_ORIGIN ?? "http://localhost:1420",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
     credentials: true,
   }));
 

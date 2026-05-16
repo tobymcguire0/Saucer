@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useRecipeDetailViewModel } from "../../features/browse/useRecipeDetailViewModel";
 import { cuisineEmoji, cuisineGradientClass } from "../../lib/cuisineGradients";
 import { cn } from "../../lib/cn";
-import { splitAmountFromRaw } from "../../lib/ingredientRows";
+import { parseIngredientRow } from "../../lib/ingredientRows";
 import StarRating from "../StarRating";
 
 function parseMinutes(value: string | undefined): number {
@@ -21,10 +21,41 @@ function deriveDifficulty(prep?: string, cook?: string): string {
   return "Advanced";
 }
 
+function parseQty(qty: string): number {
+  const s = qty
+    .replace(/¼/g, "1/4").replace(/½/g, "1/2").replace(/¾/g, "3/4")
+    .replace(/⅓/g, "1/3").replace(/⅔/g, "2/3")
+    .replace(/⅛/g, "1/8").replace(/⅜/g, "3/8").replace(/⅝/g, "5/8").replace(/⅞/g, "7/8")
+    .trim();
+  const mixed = s.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+  if (mixed) return Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
+  const frac = s.match(/^(\d+)\/(\d+)$/);
+  if (frac) return Number(frac[1]) / Number(frac[2]);
+  return Number.parseFloat(s) || 0;
+}
+
+const NAMED_FRACS: [number, string][] = [
+  [1 / 8, "⅛"], [1 / 4, "¼"], [1 / 3, "⅓"], [3 / 8, "⅜"],
+  [1 / 2, "½"], [5 / 8, "⅝"], [2 / 3, "⅔"], [3 / 4, "¾"], [7 / 8, "⅞"],
+];
+
+function formatQty(value: number): string {
+  if (value <= 0) return "";
+  const whole = Math.floor(value);
+  const frac = value - whole;
+  if (frac > 0.04) {
+    const closest = NAMED_FRACS.reduce((b, f) => Math.abs(f[0] - frac) < Math.abs(b[0] - frac) ? f : b);
+    if (Math.abs(frac - closest[0]) < 0.06)
+      return whole > 0 ? `${whole} ${closest[1]}` : closest[1];
+    return value.toFixed(1).replace(/\.0$/, "");
+  }
+  return String(whole);
+}
+
 function RecipeDetailWorkspace() {
   const {
     recipe,
-    closeRecipeDetail,
+    returnToMainView,
     updateRecipeRating,
     openEditEditor,
     tagLookup,
@@ -33,17 +64,18 @@ function RecipeDetailWorkspace() {
   } = useRecipeDetailViewModel();
   const [checkedIngredients, setCheckedIngredients] = useState<Set<string>>(new Set());
   const [doneSteps, setDoneSteps] = useState<Set<string>>(new Set());
-  const [servings, setServings] = useState<number>(() => {
+  const baseServings = (() => {
     const n = Number((recipe?.servings ?? "").match(/\d+/)?.[0]);
     return Number.isFinite(n) && n > 0 ? n : 4;
-  });
+  })();
+  const [servings, setServings] = useState<number>(baseServings);
 
   if (!recipe) {
     return (
       <div className="empty-state">
         <div className="empty-icon">🍽️</div>
         <div className="empty-title">No recipe selected</div>
-        <button type="button" className="btn btn-primary" onClick={closeRecipeDetail}>Back to recipes</button>
+        <button type="button" className="btn btn-primary" onClick={returnToMainView}>Back to recipes</button>
       </div>
     );
   }
@@ -70,7 +102,7 @@ function RecipeDetailWorkspace() {
     <div className="detail-layout">
       <div className="detail-topbar">
         <div className="detail-topbar-left">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={closeRecipeDetail}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={returnToMainView}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             Back
           </button>
@@ -165,6 +197,9 @@ function RecipeDetailWorkspace() {
         <aside className="ingredients-panel">
           <div className="panel-title">
             <span>Ingredients</span>
+          </div>
+          <div className="panel-title">
+            <span>Servings</span>
             <div className="servings-control">
               <button type="button" className="servings-btn" onClick={() => setServings((s) => Math.max(1, s - 1))}>−</button>
               <span className="servings-val">{servings}</span>
@@ -176,7 +211,11 @@ function RecipeDetailWorkspace() {
               <p className="text-muted text-sm">No ingredients recorded.</p>
             ) : (
               recipe.ingredients.map((ing) => {
-                const { amount, name } = splitAmountFromRaw(ing.raw || ing.name);
+                const parsed = parseIngredientRow(ing.raw || ing.name);
+                const scale = servings / baseServings;
+                const scaledQty = parsed.qty ? formatQty(parseQty(parsed.qty) * scale) : "";
+                const amount = [scaledQty, parsed.unit].filter(Boolean).join(" ");
+                const name = parsed.name || ing.raw || ing.name;
                 return (
                   <button
                     key={ing.id}
@@ -185,8 +224,8 @@ function RecipeDetailWorkspace() {
                     onClick={() => toggleIngredient(ing.id)}
                   >
                     <span className="ingredient-check" />
-                    {amount ? <span className="ingredient-amount">{amount}</span> : null}
                     <span className="ingredient-name">{name}</span>
+                    {amount ? <span className="ingredient-amount">{amount}</span> : null}
                   </button>
                 );
               })

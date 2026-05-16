@@ -1,141 +1,87 @@
-import { useState } from "react";
 import { cn } from "../lib/cn";
 import type { Recipe, Taxonomy } from "../lib/models";
-import { sortTagIdsForPreview } from "./recipeTagPreview";
+import { cuisineEmoji, cuisineGradientClass } from "../lib/cuisineGradients";
+import { usePreferencesStore } from "../features/preferences/usePreferencesStore";
 import StarRating from "./StarRating";
-
-const previewTagLimit = 6;
 
 type RecipeCardProps = {
   recipe: Recipe;
   tagLookup: Map<string, Taxonomy["tags"][number]>;
-  categoryLookup: Map<string, Taxonomy["categories"][number]>;
+  categoryLookup?: Map<string, Taxonomy["categories"][number]>;
   onEdit: (recipe: Recipe) => void;
   onDelete: (recipeId: string) => Promise<boolean>;
   onOpenDetail: (recipeId: string) => void;
   onRate: (recipeId: string, rating: number) => Promise<void>;
 };
 
-function RecipeCard({
-  recipe,
-  tagLookup,
-  categoryLookup,
-  onEdit,
-  onDelete,
-  onOpenDetail,
-  onRate,
-}: RecipeCardProps) {
-  const [deleteConfirming, setDeleteConfirming] = useState(false);
-  const [shaking, setShaking] = useState(false);
-  const sortedTagIds = sortTagIdsForPreview(recipe.tagIds, tagLookup, categoryLookup);
-  const hasOverflow = sortedTagIds.length > previewTagLimit;
-  const previewTagIds = hasOverflow
-    ? sortedTagIds.slice(0, previewTagLimit - 1)
-    : sortedTagIds.slice(0, previewTagLimit);
-  const remainingTagCount = Math.max(sortedTagIds.length - previewTagIds.length, 0);
+function RecipeCard({ recipe, tagLookup, onEdit, onDelete, onOpenDetail, onRate }: RecipeCardProps) {
+  const showCookTime = usePreferencesStore((s) => s.showCookTimeOnCards);
+  const gradient = cuisineGradientClass(recipe.cuisine);
+  const emoji = cuisineEmoji(recipe.cuisine, recipe.mealType);
+  const tags = recipe.tagIds.slice(0, 2);
 
   return (
     <article
-      className={cn(
-        "group flex min-h-full cursor-pointer flex-col overflow-hidden rounded-[var(--radius-card)] border bg-panel-5 shadow-[var(--shadow-panel)] transition duration-150",
-        "border-panel-15 hover:-translate-y-0.5 hover:border-accent-60 hover:shadow-[var(--shadow-floating)]",
-        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-10",
-        deleteConfirming && "border-accent-30",
-      )}
-      data-testid={`recipe-card-${recipe.id}`}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open ${recipe.title}`}
+      className="recipe-card"
       onClick={() => onOpenDetail(recipe.id)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
           onOpenDetail(recipe.id);
         }
       }}
-      onMouseLeave={() => setDeleteConfirming(false)}
+      role="button"
+      tabIndex={0}
     >
-      {recipe.heroImage ? (
-        <img className="h-48 w-full bg-panel-10 object-cover" src={recipe.heroImage} alt={recipe.title} />
-      ) : (
-        <div className="grid h-48 w-full place-items-center bg-panel-5 text-sm font-medium text-text-35">
-          No image
+      <div className={cn("recipe-card-image", gradient)}>
+        {recipe.heroImage ? (
+          <img src={recipe.heroImage} alt={recipe.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span className="card-emoji">{emoji}</span>
+        )}
+        <div className="recipe-card-overlay">
+          <button
+            type="button"
+            className="recipe-card-menu-btn"
+            title="Edit"
+            onClick={(e) => { e.stopPropagation(); onEdit(recipe); }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          </button>
+          <button
+            type="button"
+            className="recipe-card-menu-btn"
+            title="Delete"
+            onClick={(e) => { e.stopPropagation(); void onDelete(recipe.id); }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+          </button>
         </div>
-      )}
-      <div className="flex flex-1 flex-col gap-4 p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-xl font-semibold text-text-60">{recipe.title}</h3>
-            <p className="mt-1 text-sm text-text-35">
-              {recipe.cuisine || "Unknown cuisine"} · {recipe.mealType || "Any meal"} ·{" "}
-              {recipe.servings || "Servings not set"}
-            </p>
+      </div>
+      <div className="recipe-card-body">
+        <div className="recipe-card-meta">
+          <span className="recipe-card-cuisine">{recipe.cuisine || "Recipe"}</span>
+          {showCookTime && recipe.servings ? (
+            <>
+              <span className="recipe-card-dot">·</span>
+              <span className="recipe-card-cuisine">{recipe.servings}</span>
+            </>
+          ) : null}
+        </div>
+        <h3 className="recipe-card-title">{recipe.title}</h3>
+        <div className="recipe-card-footer">
+          <div className="recipe-card-tags">
+            {tags.map((tagId) => (
+              <span key={tagId} className="tag tag-accent">{tagLookup.get(tagId)?.name ?? tagId}</span>
+            ))}
           </div>
           <StarRating
             rating={recipe.rating}
             label={`Rate ${recipe.title}`}
             compact
             stopPropagation
-            onRate={(value) => {
-              setDeleteConfirming(false);
-              void onRate(recipe.id, value);
-            }}
+            onRate={(value) => void onRate(recipe.id, value)}
           />
-        </div>
-        <p className="line-clamp-3 text-sm leading-6 text-text-45">{recipe.summary}</p>
-        <div
-          className={cn(
-            "relative mt-auto min-h-0",
-            remainingTagCount > 0 &&
-              "after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-4 after:bg-gradient-to-b after:from-transparent after:to-background-0",
-          )}
-        >
-          <div className="flex max-h-[4.75rem] flex-wrap content-start gap-2 overflow-hidden pr-1">
-            {previewTagIds.map((tagId) => (
-              <span key={tagId} className="chip chip-static">
-                {tagLookup.get(tagId)?.name ?? tagId}
-              </span>
-            ))}
-            {remainingTagCount > 0 ? (
-              <span className="chip chip-static">+{remainingTagCount} more</span>
-            ) : null}
-          </div>
-        </div>
-        <div className="relative z-10 flex flex-wrap gap-3 pt-2">
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={(event) => {
-              event.stopPropagation();
-              setDeleteConfirming(false);
-              onEdit(recipe);
-            }}
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            className={cn(
-              deleteConfirming
-                ? "btn-primary border-accent-55 bg-accent-50 hover:border-accent-60 hover:bg-accent-55 active:bg-accent-60"
-                : "btn-secondary",
-              shaking && "animate-shake",
-            )}
-            onClick={async (event) => {
-              event.stopPropagation();
-              if (deleteConfirming) {
-                const deleted = await onDelete(recipe.id);
-                if (!deleted) {
-                  setShaking(true);
-                  setTimeout(() => setShaking(false), 500);
-                }
-                return;
-              }
-              setDeleteConfirming(true);
-            }}
-          >
-            {deleteConfirming ? "Confirm delete" : "Delete"}
-          </button>
         </div>
       </div>
     </article>

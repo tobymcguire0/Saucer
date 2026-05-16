@@ -52,6 +52,9 @@ export interface Recipe {
   servings?: string;
   cuisine?: string;
   mealType?: string;
+  prepTime?: string;
+  cookTime?: string;
+  notes?: string;
   rating: number;
   tagIds: string[];
   linkedRecipeIds: string[];
@@ -82,6 +85,9 @@ export interface RecipeDraft {
   servings: string;
   cuisine: string;
   mealType: string;
+  prepTime?: string;
+  cookTime?: string;
+  notes?: string;
   selectedTagIds: string[];
   selectedLinkedRecipeIds: string[];
   stepIngredientMap?: Record<number, number[]>;
@@ -93,6 +99,8 @@ export interface RecipeQuery {
   excludedTagIds: string[];
   requiredIngredientTerms: string[];
   sortBy: RecipeSort;
+  minRating?: number;
+  maxTotalMinutes?: number;
 }
 
 export interface RandomRecipeRequest {

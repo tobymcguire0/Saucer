@@ -1,1 +1,1 @@
-export type AppView = "recipes" | "taxonomy" | "recipeDetail";
+export type AppView = "browse" | "detail" | "editor" | "search" | "settings";

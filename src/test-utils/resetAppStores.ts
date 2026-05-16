@@ -5,7 +5,6 @@ import { resetRecipeEditorStore } from "../features/editor/useRecipeEditorStore"
 import { resetStatusStore } from "../features/status/useStatusStore";
 import { resetSyncStore } from "../features/sync/useSyncStore";
 import { resetTaxonomyUiStore } from "../features/taxonomy/useTaxonomyUiStore";
-import { resetThemeStore } from "../features/theme/useThemeStore";
 
 export function resetAppStores() {
   resetStatusStore();
@@ -14,6 +13,5 @@ export function resetAppStores() {
   resetRecipeEditorStore();
   resetSaucerStore();
   resetSyncStore();
-  resetThemeStore();
   resetRecipeStore();
 }

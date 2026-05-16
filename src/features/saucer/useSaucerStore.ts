@@ -6,6 +6,7 @@ import {
   ensureDefaultTaxonomy,
   mergeTags,
   normalizeTerm,
+  removeAlias as removeAliasFromTaxonomy,
   upsertCategory,
   upsertTag,
 } from "../../lib/taxonomy";
@@ -139,6 +140,7 @@ type SaucerStoreState = ReturnType<typeof createInitialState> & {
   saveCategory: (name: string, description: string) => Promise<void>;
   saveTag: (categoryId: string, name: string) => Promise<void>;
   saveAlias: (tagId: string, alias: string) => Promise<void>;
+  removeAlias: (tagId: string, alias: string) => Promise<void>;
   mergeSelectedTags: (sourceTagId: string, targetTagId: string) => Promise<void>;
   addDraftTag: (categoryId: string, name: string) => Promise<string | undefined>;
   reset: () => void;
@@ -330,6 +332,19 @@ export const useSaucerStore = create<SaucerStoreState>((set, get) => ({
     } catch (error) {
       useStatusStore.getState().updateStatus(
         `Alias saved locally, but taxonomy sync failed: ${error instanceof Error ? error.message : "unknown error"}`,
+        "error",
+      );
+    }
+  },
+  removeAlias: async (tagId, alias) => {
+    const { recipes, taxonomy, replaceAll } = get();
+    const nextTaxonomy = removeAliasFromTaxonomy(taxonomy, tagId, alias);
+    await replaceAll(recipes, nextTaxonomy, "Alias removed.");
+    try {
+      await syncTaxonomyIfConnected(nextTaxonomy);
+    } catch (error) {
+      useStatusStore.getState().updateStatus(
+        `Alias removed locally, but taxonomy sync failed: ${error instanceof Error ? error.message : "unknown error"}`,
         "error",
       );
     }

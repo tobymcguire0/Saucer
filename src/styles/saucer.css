@@ -372,7 +372,7 @@ ul { list-style: none; }
 }
 .recipe-card-menu-btn {
   width: 32px; height: 32px;
-  background: rgba(255,255,255,0.9);
+  background: var(--surface);
   border: none;
   border-radius: var(--r-sm);
   display: flex; align-items: center; justify-content: center;
@@ -586,7 +586,7 @@ ul { list-style: none; }
   position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; justify-content: space-between;
   padding: var(--sp-3) var(--sp-5);
-  background: rgba(249,247,245,0.88);
+  background: var(--surface);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);

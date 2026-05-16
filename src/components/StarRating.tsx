@@ -6,7 +6,9 @@ type StarRatingProps = {
   label: string;
   onRate: (rating: number) => void;
   compact?: boolean;
+  large?: boolean;
   stopPropagation?: boolean;
+  showValue?: boolean;
 };
 
 function StarRating({
@@ -14,41 +16,40 @@ function StarRating({
   label,
   onRate,
   compact = false,
+  large = false,
   stopPropagation = false,
+  showValue = false,
 }: StarRatingProps) {
   const [hoverValue, setHoverValue] = useState(0);
   const displayValue = hoverValue || rating;
+  const size = large ? 24 : compact ? 14 : 18;
 
   return (
-    <div className={cn("flex items-center", compact ? "gap-0.5" : "gap-1")} aria-label={label} onMouseLeave={() => setHoverValue(0)}>
-      {[1, 2, 3, 4, 5].map((value) => (
-        <button
-          key={value}
-          type="button"
-          className={cn(
-            "rounded-full border border-transparent bg-transparent p-1 leading-none transition",
-            "text-shadow-xs text-shadow-accent-60",
-            "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-accent-10",
-            compact ? "text-lg" : "text-2xl",
-            value <= displayValue ? "text-accent-45" : "text-panel-25",
-            "hover:text-accent-60",
-          )}
-          aria-label={`${label}: ${value} star${value === 1 ? "" : "s"}`}
-          aria-pressed={value === rating}
-          data-filled={value <= displayValue}
-          onMouseEnter={() => setHoverValue(value)}
-          onFocus={() => setHoverValue(value)}
-          onBlur={() => setHoverValue(0)}
-          onClick={(event) => {
-            if (stopPropagation) {
-              event.stopPropagation();
-            }
-            onRate(value);
-          }}
-        >
-          ★
-        </button>
-      ))}
+    <div className={cn("star-rating", large && "star-rating-lg")} aria-label={label} onMouseLeave={() => setHoverValue(0)}>
+      {[1, 2, 3, 4, 5].map((value) => {
+        const filled = value <= displayValue;
+        return (
+          <button
+            key={value}
+            type="button"
+            className="star-btn"
+            aria-label={`${label}: ${value} star${value === 1 ? "" : "s"}`}
+            aria-pressed={value === rating}
+            onMouseEnter={() => setHoverValue(value)}
+            onFocus={() => setHoverValue(value)}
+            onBlur={() => setHoverValue(0)}
+            onClick={(event) => {
+              if (stopPropagation) event.stopPropagation();
+              onRate(value);
+            }}
+          >
+            <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
+              <polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2" />
+            </svg>
+          </button>
+        );
+      })}
+      {showValue && rating > 0 ? <span className="star-rating-value">{rating.toFixed(1)}</span> : null}
     </div>
   );
 }

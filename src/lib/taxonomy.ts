@@ -613,6 +613,9 @@ export function convertDraftToRecipe(draft: RecipeDraft): Recipe {
     servings: draft.servings.trim() || undefined,
     cuisine: draft.cuisine.trim() || undefined,
     mealType: draft.mealType.trim() || undefined,
+    prepTime: draft.prepTime?.trim() || undefined,
+    cookTime: draft.cookTime?.trim() || undefined,
+    notes: draft.notes?.trim() || undefined,
     rating: 0,
     tagIds: [...new Set(draft.selectedTagIds)],
     linkedRecipeIds: [...new Set(draft.selectedLinkedRecipeIds ?? [])],
@@ -633,6 +636,9 @@ export function createEmptyDraft(sourceType: RecipeDraft["sourceType"] = "manual
     servings: "",
     cuisine: "",
     mealType: "",
+    prepTime: "",
+    cookTime: "",
+    notes: "",
     selectedTagIds: [],
     selectedLinkedRecipeIds: [],
   };
@@ -710,6 +716,19 @@ export function upsertTag(
   return {
     ...taxonomy,
     tags: [...taxonomy.tags, tag],
+  };
+}
+
+export function removeAlias(taxonomy: Taxonomy, tagId: string, alias: string) {
+  const target = normalizeTerm(alias);
+  if (!target) return taxonomy;
+  return {
+    ...taxonomy,
+    tags: taxonomy.tags.map((tag) =>
+      tag.id === tagId
+        ? { ...tag, aliases: tag.aliases.filter((entry) => normalizeTerm(entry) !== target) }
+        : tag,
+    ),
   };
 }
 

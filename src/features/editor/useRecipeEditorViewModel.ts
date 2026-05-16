@@ -1,7 +1,9 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 
+import type { Recipe, SourceType } from "../../lib/models";
 import { useSaucerStore } from "../saucer/useSaucerStore";
+import { useBrowseStore } from "../browse/useBrowseStore";
 import { useRecipeEditorStore } from "./useRecipeEditorStore";
 import {
   buildTagSuggestions,
@@ -10,16 +12,30 @@ import {
 } from "../../lib/taxonomy";
 
 export function useRecipeEditorActions() {
-  return useRecipeEditorStore(
-    useShallow((state) => ({
-      openCreateEditor: state.openCreateEditor,
-      openEditEditor: state.openEditEditor,
-    })),
+  const openCreate = useRecipeEditorStore((s) => s.openCreateEditor);
+  const openEdit = useRecipeEditorStore((s) => s.openEditEditor);
+  const setActiveWorkspace = useBrowseStore((s) => s.setActiveWorkspace);
+
+  const openCreateEditor = useCallback(
+    (sourceType: SourceType) => {
+      openCreate(sourceType);
+      setActiveWorkspace("editor");
+    },
+    [openCreate, setActiveWorkspace],
   );
+  const openEditEditor = useCallback(
+    (recipe: Recipe) => {
+      openEdit(recipe);
+      setActiveWorkspace("editor");
+    },
+    [openEdit, setActiveWorkspace],
+  );
+  return { openCreateEditor, openEditEditor };
 }
 
 export function useRecipeEditorViewModel() {
   const taxonomy = useSaucerStore((state) => state.taxonomy);
+  const setActiveWorkspace = useBrowseStore((s) => s.setActiveWorkspace);
   const state = useRecipeEditorStore(
     useShallow((store) => ({
       editorOpen: store.editorOpen,
@@ -50,6 +66,16 @@ export function useRecipeEditorViewModel() {
     })),
   );
 
+  const exitEditor = useCallback(() => {
+    state.closeEditor();
+    setActiveWorkspace("browse");
+  }, [state, setActiveWorkspace]);
+
+  const saveAndExit = useCallback(async () => {
+    await state.saveDraft();
+    setActiveWorkspace("browse");
+  }, [state, setActiveWorkspace]);
+
   return useMemo(() => {
     const draftSuggestions = buildTagSuggestions(
       {
@@ -73,11 +99,13 @@ export function useRecipeEditorViewModel() {
 
     return {
       ...state,
+      exitEditor,
+      saveAndExit,
       visibleDraftSuggestions,
       visibleEditableTagIds,
       showSourceSelector,
       showImportControls,
       showDraftForm,
     };
-  }, [state, taxonomy]);
+  }, [state, taxonomy, exitEditor, saveAndExit]);
 }

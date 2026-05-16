@@ -1,242 +1,253 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { cn } from "../../lib/cn";
+import { useState } from "react";
 import { useRecipeDetailViewModel } from "../../features/browse/useRecipeDetailViewModel";
+import { cuisineEmoji, cuisineGradientClass } from "../../lib/cuisineGradients";
+import { cn } from "../../lib/cn";
+import { splitAmountFromRaw } from "../../lib/ingredientRows";
 import StarRating from "../StarRating";
-import { sortTagIdsForPreview } from "../recipeTagPreview";
+
+function parseMinutes(value: string | undefined): number {
+  if (!value) return 0;
+  const m = value.match(/(\d+)\s*(h|hr|hour|hours)?\s*(\d+)?\s*(m|min|mins|minute|minutes)?/i);
+  if (!m) return 0;
+  const hours = m[2] ? Number(m[1]) : 0;
+  const mins = m[2] ? Number(m[3] ?? 0) : Number(m[1]);
+  return hours * 60 + (Number.isFinite(mins) ? mins : 0);
+}
+function deriveDifficulty(prep?: string, cook?: string): string {
+  const total = parseMinutes(prep) + parseMinutes(cook);
+  if (total === 0) return "Intermediate";
+  if (total <= 30) return "Easy";
+  if (total <= 90) return "Intermediate";
+  return "Advanced";
+}
 
 function RecipeDetailWorkspace() {
   const {
     recipe,
     closeRecipeDetail,
-    deleteRecipe,
     updateRecipeRating,
     openEditEditor,
     tagLookup,
-    categoryLookup,
     linkedRecipes,
     openRecipeDetail,
   } = useRecipeDetailViewModel();
-  const [deleteConfirming, setDeleteConfirming] = useState(false);
-  const [shaking, setShaking] = useState(false);
-
-  const handleDelete = useCallback(async () => {
-    if (!recipe) return;
-    const deleted = await deleteRecipe(recipe.id);
-    if (!deleted) {
-      setShaking(true);
-      setTimeout(() => setShaking(false), 500);
-    }
-  }, [recipe, deleteRecipe]);
-  const sortedTagIds = recipe
-    ? sortTagIdsForPreview(recipe.tagIds, tagLookup, categoryLookup)
-    : [];
-
-  const ingredientLookup = useMemo(
-    () => new Map((recipe?.ingredients ?? []).map((ingredient) => [ingredient.id, ingredient])),
-    [recipe],
-  );
-
-  useEffect(() => {
-    setDeleteConfirming(false);
-  }, [recipe?.id]);
+  const [checkedIngredients, setCheckedIngredients] = useState<Set<string>>(new Set());
+  const [doneSteps, setDoneSteps] = useState<Set<string>>(new Set());
+  const [servings, setServings] = useState<number>(() => {
+    const n = Number((recipe?.servings ?? "").match(/\d+/)?.[0]);
+    return Number.isFinite(n) && n > 0 ? n : 4;
+  });
 
   if (!recipe) {
     return (
-      <section className="rounded-[var(--radius-card)] border border-panel-15 bg-background-0 p-5 shadow-[var(--shadow-panel)]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary-60">
-              Recipe detail
-            </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-text-60">
-              No recipe selected
-            </h2>
-          </div>
-          <button type="button" className="btn-secondary" onClick={closeRecipeDetail}>
-            Back to browse
-          </button>
-        </div>
-      </section>
+      <div className="empty-state">
+        <div className="empty-icon">🍽️</div>
+        <div className="empty-title">No recipe selected</div>
+        <button type="button" className="btn btn-primary" onClick={closeRecipeDetail}>Back to recipes</button>
+      </div>
     );
   }
 
+  const heroClass = cuisineGradientClass(recipe.cuisine);
+  const emoji = cuisineEmoji(recipe.cuisine, recipe.mealType);
+
+  const toggleIngredient = (id: string) => {
+    setCheckedIngredients((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleStep = (id: string) => {
+    setDoneSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   return (
-    <section
-      className="space-y-5 rounded-[var(--radius-card)] border border-panel-15 bg-background-0 p-5 shadow-[var(--shadow-panel)]"
-      data-testid="recipe-detail-view"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary-60">
-            Recipe detail
-          </p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-text-60">{recipe.title}</h2>
-          <p className="mt-2 text-sm text-text-35">
-            {recipe.cuisine || "Unknown cuisine"} · {recipe.mealType || "Any meal"} ·{" "}
-            {recipe.servings || "Servings not set"}
-          </p>
+    <div className="detail-layout">
+      <div className="detail-topbar">
+        <div className="detail-topbar-left">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={closeRecipeDetail}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            Back
+          </button>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => {
-              setDeleteConfirming(false);
-              closeRecipeDetail();
-            }}
-          >
-            Back to browse
+        <div className="detail-topbar-right">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEditEditor(recipe)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+            Edit
           </button>
           <button
             type="button"
-            className="btn-primary"
+            className="btn btn-ghost btn-sm"
+            aria-label="Share"
             onClick={() => {
-              setDeleteConfirming(false);
-              openEditEditor(recipe);
-            }}
-          >
-            Edit recipe
-          </button>
-          <button
-            type="button"
-            className={cn(
-              deleteConfirming
-                ? "btn-primary border-accent-55 bg-accent-50 hover:border-accent-60 hover:bg-accent-55 active:bg-accent-60"
-                : "btn-secondary",
-              shaking && "animate-shake",
-            )}
-            onClick={() => {
-              if (deleteConfirming) {
-                void handleDelete();
-                return;
+              if (navigator.share) {
+                void navigator.share({ title: recipe.title, url: recipe.sourceRef ?? location.href });
               }
-              setDeleteConfirming(true);
             }}
           >
-            {deleteConfirming ? "Confirm delete" : "Delete recipe"}
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13" />
+            </svg>
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" aria-label="More">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
+            </svg>
           </button>
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.9fr)]">
-        <div className="flex flex-col gap-4 rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
-          {recipe.heroImage ? (
-            <img
-              className="min-h-[260px] w-full rounded-[calc(var(--radius-card)-0.35rem)] bg-panel-10 object-cover"
-              src={recipe.heroImage}
-              alt={recipe.title}
-            />
-          ) : (
-            <div className="grid min-h-[260px] w-full place-items-center rounded-[calc(var(--radius-card)-0.35rem)] bg-panel-5 text-sm font-medium text-text-35">
-              No image
+      <div className={cn("recipe-hero", heroClass)}>
+        {recipe.heroImage ? (
+          <img src={recipe.heroImage} alt={recipe.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span className="recipe-hero-emoji">{emoji}</span>
+        )}
+        <div className="recipe-hero-gradient" />
+      </div>
+
+      <div className="recipe-header">
+        <div className="recipe-eyebrow">
+          <span>{recipe.cuisine || "Recipe"}</span>
+          {recipe.mealType ? <><span>·</span><span>{recipe.mealType}</span></> : null}
+        </div>
+        <h1 className="recipe-title">{recipe.title}</h1>
+        {recipe.summary ? <p className="text-muted text-base">{recipe.summary}</p> : null}
+      </div>
+
+      <div className="recipe-meta-row">
+        <div className="recipe-meta-item">
+          <span className="recipe-meta-label">Prep</span>
+          <span className="recipe-meta-value">{recipe.prepTime || "—"}</span>
+        </div>
+        <div className="recipe-meta-divider" />
+        <div className="recipe-meta-item">
+          <span className="recipe-meta-label">Cook</span>
+          <span className="recipe-meta-value">{recipe.cookTime || "—"}</span>
+        </div>
+        <div className="recipe-meta-divider" />
+        <div className="recipe-meta-item">
+          <span className="recipe-meta-label">Servings</span>
+          <span className="recipe-meta-value">{recipe.servings || "—"}</span>
+        </div>
+        <div className="recipe-meta-divider" />
+        <div className="recipe-meta-item">
+          <span className="recipe-meta-label">Rating</span>
+          <StarRating
+            rating={recipe.rating}
+            label={`Rate ${recipe.title}`}
+            large
+            showValue
+            onRate={(value) => void updateRecipeRating(recipe.id, value)}
+          />
+        </div>
+        <div className="recipe-meta-divider" />
+        <div className="recipe-meta-item">
+          <span className="recipe-meta-label">Difficulty</span>
+          <span className="recipe-meta-value">{deriveDifficulty(recipe.prepTime, recipe.cookTime)}</span>
+        </div>
+      </div>
+
+      {recipe.tagIds.length > 0 ? (
+        <div className="recipe-tags-row">
+          {recipe.tagIds.map((tagId) => (
+            <span key={tagId} className="tag tag-accent">{tagLookup.get(tagId)?.name ?? tagId}</span>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="recipe-body">
+        <aside className="ingredients-panel">
+          <div className="panel-title">
+            <span>Ingredients</span>
+            <div className="servings-control">
+              <button type="button" className="servings-btn" onClick={() => setServings((s) => Math.max(1, s - 1))}>−</button>
+              <span className="servings-val">{servings}</span>
+              <button type="button" className="servings-btn" onClick={() => setServings((s) => s + 1)}>+</button>
             </div>
-          )}
-          <p className="text-sm leading-6 text-text-45">{recipe.summary}</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-medium text-text-35">Your rating:</span>
-            <StarRating
-              rating={recipe.rating}
-              label={`Rate ${recipe.title}`}
-              onRate={(value) => {
-                setDeleteConfirming(false);
-                void updateRecipeRating(recipe.id, value);
-              }}
-            />
           </div>
-          <div className="flex flex-wrap gap-2">
-            {sortedTagIds.map((tagId) => (
-              <span key={tagId} className="chip chip-static">
-                {tagLookup.get(tagId)?.name ?? tagId}
-              </span>
+          <div className="ingredient-list">
+            {recipe.ingredients.length === 0 ? (
+              <p className="text-muted text-sm">No ingredients recorded.</p>
+            ) : (
+              recipe.ingredients.map((ing) => {
+                const { amount, name } = splitAmountFromRaw(ing.raw || ing.name);
+                return (
+                  <button
+                    key={ing.id}
+                    type="button"
+                    className={cn("ingredient-item", checkedIngredients.has(ing.id) && "checked")}
+                    onClick={() => toggleIngredient(ing.id)}
+                  >
+                    <span className="ingredient-check" />
+                    {amount ? <span className="ingredient-amount">{amount}</span> : null}
+                    <span className="ingredient-name">{name}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </aside>
+
+        <section className="steps-panel">
+          <div className="panel-title"><span>Instructions</span></div>
+          <ol className="steps-list">
+            {recipe.instructions.map((step, idx) => (
+              <li key={step.id} className={cn("step-item", doneSteps.has(step.id) && "done")}>
+                <div className="step-number">{idx + 1}</div>
+                <div>
+                  <p className="step-text">{step.text}</p>
+                  <button type="button" className="step-done-btn" onClick={() => toggleStep(step.id)}>
+                    {doneSteps.has(step.id) ? "✓ Done" : "Mark done"}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
+
+      {linkedRecipes.length > 0 ? (
+        <section className="related-section">
+          <h3>You might also like</h3>
+          <div className="related-grid">
+            {linkedRecipes.map((linked) => (
+              <button
+                key={linked.id}
+                type="button"
+                className="related-card"
+                onClick={() => openRecipeDetail(linked.id)}
+              >
+                <div className={cn("related-card-img", cuisineGradientClass(linked.cuisine))}>
+                  {linked.heroImage ? (
+                    <img src={linked.heroImage} alt={linked.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <span>{cuisineEmoji(linked.cuisine, linked.mealType)}</span>
+                  )}
+                </div>
+                <div className="related-card-body">
+                  <div className="related-card-title">{linked.title}</div>
+                  <div className="related-card-meta">{linked.cuisine || "Recipe"}{linked.servings ? ` · ${linked.servings}` : ""}</div>
+                </div>
+              </button>
             ))}
           </div>
-          {linkedRecipes.length > 0 ? (
-            <div className="flex flex-col gap-2" data-testid="linked-recipes">
-              <span className="text-sm font-medium text-text-35">Linked recipes:</span>
-              <div className="flex flex-wrap gap-2">
-                {linkedRecipes.map((linked) => (
-                  <button
-                    key={linked.id}
-                    type="button"
-                    className="chip chip-static hover:border-primary-40"
-                    onClick={() => openRecipeDetail(linked.id)}
-                  >
-                    {linked.title}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
+        </section>
+      ) : null}
 
-        <div className="flex flex-col gap-4">
-          <section className="rounded-[var(--radius-card)] border border-panel-10 bg-panel-0 p-4">
-            <h3 className="text-xl font-semibold text-text-60">All ingredients</h3>
-            <ul className="mt-3 space-y-2 pl-5 text-sm leading-6 text-text-45">
-              {recipe.ingredients.map((ingredient) => (
-                <li key={ingredient.id}>{ingredient.raw}</li>
-              ))}
-            </ul>
-          </section>
+      {recipe.sourceRef ? (
+        <div className="source-bar">
+          <span>Source:</span>
+          <a href={recipe.sourceRef} target="_blank" rel="noreferrer">{recipe.sourceRef}</a>
+          <span>· Saved {new Date(recipe.createdAt).toLocaleDateString()}</span>
         </div>
-      </div>
-
-      <section
-        className="flex flex-col gap-4"
-        aria-label="Recipe steps"
-        data-testid="recipe-steps"
-      >
-        <h3 className="text-xl font-semibold text-text-60">Steps</h3>
-        {recipe.instructions.length === 0 ? (
-          <p className="text-sm text-text-35">No instructions for this recipe yet.</p>
-        ) : (
-          recipe.instructions.map((step, index) => {
-            const stepNumber = index + 1;
-            const stepIngredients = step.ingredientUsages
-              .map((usage) => ingredientLookup.get(usage.ingredientId))
-              .filter((ing): ing is NonNullable<typeof ing> => Boolean(ing));
-            return (
-              <article
-                key={step.id}
-                className="overflow-hidden rounded-[var(--radius-card)] border-2 border-panel-15 bg-panel-0 shadow-[var(--shadow-panel)]"
-                data-testid={`recipe-step-${stepNumber}`}
-              >
-                <header className="flex items-center justify-between gap-3 border-b border-panel-15 bg-panel-5 px-4 py-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-60">
-                    Step {stepNumber}
-                  </span>
-                  <span className="text-xs font-medium text-text-35">
-                    {stepIngredients.length > 0
-                      ? `${stepIngredients.length} ingredient${stepIngredients.length === 1 ? "" : "s"}`
-                      : "No specific ingredients"}
-                  </span>
-                </header>
-                <div className="flex flex-col gap-3 p-4">
-                  {stepIngredients.length > 0 ? (
-                    <section
-                      className="rounded-[calc(var(--radius-card)-0.5rem)] border border-dashed border-panel-15 bg-panel-5 p-3"
-                      aria-label={`Step ${stepNumber} ingredients`}
-                    >
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-text-35">
-                        Ingredients
-                      </p>
-                      <ul className="mt-2 space-y-1 pl-5 text-sm leading-6 text-text-50">
-                        {stepIngredients.map((ingredient) => (
-                          <li key={ingredient.id}>{ingredient.raw}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  ) : null}
-                  <section aria-label={`Step ${stepNumber} instruction`}>
-                    <p className="mt-2 text-base leading-7 text-text-50">{step.text}</p>
-                  </section>
-                </div>
-              </article>
-            );
-          })
-        )}
-      </section>
-    </section>
+      ) : null}
+    </div>
   );
 }
 

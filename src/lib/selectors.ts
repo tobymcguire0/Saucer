@@ -6,6 +6,16 @@ import type {
 } from "./models";
 import { normalizeTerm } from "./taxonomy";
 
+function extractTotalMinutes(value?: string): number | undefined {
+  if (!value) return undefined;
+  const match = value.match(/(\d+)\s*(h|hr|hour|min|m)?/i);
+  if (!match) return undefined;
+  const n = Number(match[1]);
+  if (Number.isNaN(n)) return undefined;
+  const unit = (match[2] ?? "min").toLowerCase();
+  return unit.startsWith("h") ? n * 60 : n;
+}
+
 function sortRecipes(recipes: Recipe[], sortBy: RecipeQuery["sortBy"]) {
   const copy = [...recipes];
   copy.sort((left, right) => {
@@ -60,6 +70,17 @@ export function filterRecipes(
         )
       ) {
         return false;
+      }
+
+      if (typeof query.minRating === "number" && recipe.rating < query.minRating) {
+        return false;
+      }
+
+      if (typeof query.maxTotalMinutes === "number") {
+        const minutes = extractTotalMinutes(recipe.servings);
+        if (minutes !== undefined && minutes > query.maxTotalMinutes) {
+          return false;
+        }
       }
 
       return true;

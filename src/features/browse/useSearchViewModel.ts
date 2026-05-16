@@ -39,7 +39,7 @@ export function useSearchViewModel() {
 
     if (recipe) {
       state.setSelectedRecipeId(recipe.id);
-      state.setActiveWorkspace("recipeDetail");
+      state.setActiveWorkspace("detail");
       updateStatus(`Viewing ${recipe.title}.`, "info");
       return;
     }

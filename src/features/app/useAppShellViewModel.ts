@@ -7,15 +7,14 @@ import { useBrowseStore } from "../browse/useBrowseStore";
 import type { AppView } from "../browse/types";
 
 export function getWorkspaceTitle(activeView: AppView) {
-  if (activeView === "recipes") {
-    return "Browse recipes";
+  switch (activeView) {
+    case "browse": return "My Recipes";
+    case "detail": return "Recipe";
+    case "editor": return "Recipe Editor";
+    case "search": return "Search";
+    case "settings": return "Settings";
+    default: return "";
   }
-
-  if (activeView === "recipeDetail") {
-    return "Recipe details";
-  }
-
-  return "Manage categories and tags";
 }
 
 export function useAppShellViewModel() {
@@ -33,7 +32,7 @@ export function useAppShellViewModel() {
   const openRecipeDetail = useCallback(
     (recipeId: string) => {
       browseState.setSelectedRecipeId(recipeId);
-      browseState.setActiveWorkspace("recipeDetail");
+      browseState.setActiveWorkspace("detail");
       const recipe = recipes.find((entry) => entry.id === recipeId);
       updateStatus(recipe ? `Viewing ${recipe.title}.` : "Viewing recipe details.", "info");
     },
@@ -41,8 +40,8 @@ export function useAppShellViewModel() {
   );
 
   const closeRecipeDetail = useCallback(() => {
-    browseState.setActiveWorkspace("recipes");
-    updateStatus("Returned to recipe browse view.", "info");
+    browseState.setActiveWorkspace("browse");
+    updateStatus("Returned to browse.", "info");
   }, [browseState, updateStatus]);
 
   return {
